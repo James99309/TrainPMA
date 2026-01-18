@@ -79,20 +79,28 @@ class SheetsService:
         return {'user_id': user_id, 'name': name, 'company': company, 'phone': phone, 'created_at': now}
     
     def find_user_by_phone(self, phone):
-        rows = self.users_sheet.get_all_records()
-        for row in rows:
-            if str(row.get('phone')) == str(phone):
-                return row
+        try:
+            rows = self.users_sheet.get_all_records()
+            for row in rows:
+                if str(row.get('phone')) == str(phone):
+                    return row
+        except IndexError:
+            # 空表，返回 None
+            pass
         return None
     
     def get_user_by_id(self, user_id):
         cached = self._get_cache('users', user_id)
         if cached: return cached
-        rows = self.users_sheet.get_all_records()
-        for row in rows:
-            if row.get('user_id') == user_id:
-                self._set_cache('users', user_id, row)
-                return row
+        try:
+            rows = self.users_sheet.get_all_records()
+            for row in rows:
+                if row.get('user_id') == user_id:
+                    self._set_cache('users', user_id, row)
+                    return row
+        except IndexError:
+            # 空表，返回 None
+            pass
         return None
     
     # Surveys
@@ -109,7 +117,10 @@ class SheetsService:
     def get_all_surveys(self):
         cached = self._get_cache('surveys', 'all')
         if cached: return cached
-        rows = self.surveys_sheet.get_all_records()
+        try:
+            rows = self.surveys_sheet.get_all_records()
+        except IndexError:
+            rows = []
         self._set_cache('surveys', 'all', rows)
         return rows
     
@@ -213,7 +224,10 @@ class SheetsService:
     def get_questions_by_survey(self, survey_id):
         cached = self._get_cache('questions', survey_id)
         if cached: return cached
-        rows = self.questions_sheet.get_all_records()
+        try:
+            rows = self.questions_sheet.get_all_records()
+        except IndexError:
+            return []
         questions = []
         for row in rows:
             if row.get('survey_id') == survey_id:
@@ -231,7 +245,10 @@ class SheetsService:
             for q in self.get_questions_by_survey(survey_id):
                 if q.get('question_id') == question_id:
                     return q
-        rows = self.questions_sheet.get_all_records()
+        try:
+            rows = self.questions_sheet.get_all_records()
+        except IndexError:
+            return None
         for row in rows:
             if row.get('question_id') == question_id:
                 try:
@@ -259,14 +276,33 @@ class SheetsService:
         return response_id
     
     def get_user_responses(self, user_id, survey_id):
-        rows = self.responses_sheet.get_all_records()
-        responses = []
-        for row in rows:
-            if row.get('user_id') == user_id and row.get('survey_id') == survey_id:
-                row['is_correct'] = str(row.get('is_correct', 'FALSE')).upper() == 'TRUE'
-                responses.append(row)
-        return responses
-    
+        try:
+            rows = self.responses_sheet.get_all_records()
+            responses = []
+            for row in rows:
+                if row.get('user_id') == user_id and row.get('survey_id') == survey_id:
+                    row['is_correct'] = str(row.get('is_correct', 'FALSE')).upper() == 'TRUE'
+                    responses.append(row)
+            return responses
+        except IndexError:
+            # 空表
+            return []
+
+    def get_user_wrong_question_ids(self, user_id, survey_id):
+        """获取用户在该问卷中最近一次做错的题目ID列表"""
+        responses = self.get_user_responses(user_id, survey_id)
+
+        # 按题目分组，取最近一次回答
+        latest_by_question = {}
+        for r in responses:
+            qid = r.get('question_id')
+            submitted = r.get('submitted_at', '')
+            if qid not in latest_by_question or submitted > latest_by_question[qid]['submitted_at']:
+                latest_by_question[qid] = r
+
+        # 返回最近一次回答为错误的题目ID
+        return [qid for qid, r in latest_by_question.items() if not r.get('is_correct')]
+
     def get_wrong_questions(self, user_id, survey_id):
         responses = self.get_user_responses(user_id, survey_id)
         wrong_ids = [r['question_id'] for r in responses if not r['is_correct'] and int(r.get('attempt', 1)) == 1]
@@ -284,7 +320,10 @@ class SheetsService:
     def get_leaderboard(self, survey_id, limit=100):
         cached = self._get_cache('leaderboard', survey_id)
         if cached: return cached
-        rows = self.scores_sheet.get_all_records()
+        try:
+            rows = self.scores_sheet.get_all_records()
+        except IndexError:
+            rows = []
         survey_scores = [r for r in rows if r.get('survey_id') == survey_id]
         user_best = {}
         for s in survey_scores:
@@ -295,16 +334,22 @@ class SheetsService:
                (total == int(user_best[uid].get('total_score', 0)) and dur < int(user_best[uid].get('duration_seconds', 0))):
                 user_best[uid] = s
         sorted_scores = sorted(user_best.values(), key=lambda x: (-int(x.get('total_score', 0)), int(x.get('duration_seconds', 0))))
-        users = {u.get('user_id'): u for u in self.users_sheet.get_all_records()}
+        try:
+            users = {u.get('user_id'): u for u in self.users_sheet.get_all_records()}
+        except IndexError:
+            users = {}
         result = [{'rank': i+1, 'user_id': s.get('user_id'), 'name': users.get(s.get('user_id'), {}).get('name', '未知'),
                    'company': users.get(s.get('user_id'), {}).get('company', ''), 'score': int(s.get('total_score', 0)),
                    'max_score': int(s.get('max_score', 0)), 'correct_count': int(s.get('correct_count', 0)),
                    'duration_seconds': int(s.get('duration_seconds', 0))} for i, s in enumerate(sorted_scores[:limit])]
         self._set_cache('leaderboard', survey_id, result)
         return result
-    
+
     def get_user_attempts(self, user_id, survey_id):
-        rows = self.scores_sheet.get_all_records()
+        try:
+            rows = self.scores_sheet.get_all_records()
+        except IndexError:
+            return 0
         return len([r for r in rows if r.get('user_id') == user_id and r.get('survey_id') == survey_id])
 
     # User Search Methods
@@ -318,7 +363,10 @@ class SheetsService:
         Returns:
             匹配的用户列表
         """
-        rows = self.users_sheet.get_all_records()
+        try:
+            rows = self.users_sheet.get_all_records()
+        except IndexError:
+            return []
         query_lower = query.lower()
         results = []
 
@@ -351,7 +399,10 @@ class SheetsService:
         Returns:
             用户列表
         """
-        rows = self.users_sheet.get_all_records()
+        try:
+            rows = self.users_sheet.get_all_records()
+        except IndexError:
+            return []
         users = []
 
         for row in rows[offset:offset + limit]:

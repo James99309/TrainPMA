@@ -49,6 +49,7 @@ interface CourseState {
   clearSurveyState: () => void;
   setSurveyUserInfo: (info: { user_id?: string; name: string; company?: string; phone?: string; user_type?: UserType; employee_info?: EmployeeInfo; token?: string }) => void;
   clearUserInfo: () => void;
+  clearCourseProgress: () => void;
   isEmployee: () => boolean;
 
   // Computed
@@ -214,6 +215,10 @@ export const useCourseStore = create<CourseState>()(
 
       clearUserInfo: () => {
         set({ surveyUserInfo: null });
+      },
+
+      clearCourseProgress: () => {
+        set({ courseProgress: {} });
       },
 
       isEmployee: () => {

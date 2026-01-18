@@ -327,8 +327,8 @@ export function SurveyQuiz({
       const isPerfect = result.percentage === 100;
 
       // Award XP and update achievements
-      // XP 计算: 每题 5 XP（例如 20 题 = 100 XP）
-      let xpEarned = questions.length * 5;
+      // XP 计算: 每题 10 XP（例如 10 题 = 100 XP）
+      let xpEarned = questions.length * 10;
 
       if (passed) {
         // 检查是否首次通过此测验

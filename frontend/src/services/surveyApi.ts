@@ -57,8 +57,12 @@ export const surveyApi = {
   // Get questions for a survey
   async getQuestions(surveyId: string): Promise<SurveyQuestion[]> {
     try {
+      const token = localStorage.getItem('auth_token');
       const result = await apiRequest<{ success: boolean; data: SurveyQuestion[] }>(
-        `/api/surveys/${surveyId}/questions`
+        `/api/surveys/${surveyId}/questions`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
       );
       return result.data || [];
     } catch (error) {

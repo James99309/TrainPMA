@@ -105,11 +105,17 @@ def get_survey(survey_id):
     except Exception as e: return jsonify({'success': False, 'message': str(e)}), 500
 
 @survey_bp.route('/<survey_id>/questions', methods=['GET'])
+@jwt_required(optional=True)
 def get_questions(survey_id):
     try:
         valid, msg = survey_service.check_survey_time(survey_id)
         if not valid: return jsonify({'success': False, 'message': msg}), 403
-        questions = survey_service.get_shuffled_questions(survey_id)
+        user_id = get_jwt_identity()
+        # 如果有用户登录，使用错题优先的随机抽取；否则普通随机
+        if user_id:
+            questions = survey_service.get_random_questions_for_user(survey_id, user_id)
+        else:
+            questions = survey_service.get_shuffled_questions(survey_id)
 
         # 🔧 DEBUG: 打印原始数据
         print("\n=== DEBUG: Questions from Google Sheets ===")

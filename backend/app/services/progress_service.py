@@ -323,11 +323,17 @@ class ProgressService:
             from app.services.sheets_service import sheets_service
 
             # 获取所有用户进度
-            all_values = self.progress_sheet.get_all_values()
-            if len(all_values) <= 1:
+            try:
+                all_values = self.progress_sheet.get_all_values()
+            except Exception:
+                return []
+
+            if not all_values or len(all_values) <= 1:
                 return []
 
             headers = all_values[0]
+            if not headers:
+                return []
             user_id_col = headers.index('user_id') if 'user_id' in headers else 1
             total_xp_col = headers.index('total_xp') if 'total_xp' in headers else 3
 
@@ -364,8 +370,10 @@ class ProgressService:
                 from app.services.pma_api_service import get_all_employees
                 employees = get_all_employees(limit=500)
                 for emp in employees:
-                    user_map[emp.get('user_id')] = emp.get('name', '未知')
-            except:
+                    # PMA API 可能返回 name 或 real_name
+                    emp_name = emp.get('name') or emp.get('real_name') or '未知'
+                    user_map[emp.get('user_id')] = emp_name
+            except Exception:
                 pass
 
             # 构建排行榜数据

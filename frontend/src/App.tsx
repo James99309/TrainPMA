@@ -63,7 +63,7 @@ function App() {
   const [currentSyllabus, setCurrentSyllabus] = useState<Syllabus | null>(null);
 
   const { username, setUsername, checkAndRestoreHearts, darkMode, loadFromServer, claimDailyLoginReward } = useProgressStore();
-  const { currentCourse, setCourse, setSurveyUserInfo, clearUserInfo, surveyUserInfo } = useCourseStore();
+  const { currentCourse, setCourse, setSurveyUserInfo, clearUserInfo, clearCourseProgress, surveyUserInfo } = useCourseStore();
   const { markCourseCompletedInSyllabus, clearState: clearSyllabusState } = useSyllabusStore();
   const chapters = bookData.chapters as Chapter[];
   const hasClaimedLoginReward = useRef(false);
@@ -306,6 +306,9 @@ function App() {
     clearAuthToken();  // Clear in-memory token in progressApi
     // Clear progress store (including localStorage) to prevent data pollution
     useProgressStore.getState().logout();
+    // Clear course progress to prevent data pollution between users
+    localStorage.removeItem('stargirl-courses');
+    clearCourseProgress();
     // Clear wrong questions data
     useWrongQuestionStore.getState().clearAll();
     // Clear username from progress store (redundant after logout(), but kept for clarity)
