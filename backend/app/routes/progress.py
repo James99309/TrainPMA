@@ -230,6 +230,39 @@ def sync_progress():
         }), 500
 
 
+@progress_bp.route('/leaderboard', methods=['GET'])
+def get_xp_leaderboard():
+    """
+    获取全局 XP 排行榜
+
+    Response:
+        成功: {
+            "success": true,
+            "data": [
+                {
+                    "rank": 1,
+                    "username": "用户名",
+                    "totalXP": 1000,
+                    "level": 11
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        leaderboard = progress_service.get_leaderboard(limit=50)
+        return jsonify({
+            'success': True,
+            'data': leaderboard
+        }), 200
+    except Exception as e:
+        print(f"❌ 获取排行榜失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取排行榜失败: {str(e)}'
+        }), 500
+
+
 def _merge_progress(server: dict, client: dict) -> dict:
     """
     合并服务器和客户端进度

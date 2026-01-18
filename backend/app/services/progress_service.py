@@ -309,5 +309,78 @@ class ProgressService:
         }
 
 
+    def get_leaderboard(self, limit: int = 50) -> list:
+        """
+        获取全局 XP 排行榜
+
+        Args:
+            limit: 返回的最大用户数
+
+        Returns:
+            排行榜数据列表，按 XP 降序排列
+        """
+        try:
+            from app.services.sheets_service import sheets_service
+
+            # 获取所有用户进度
+            all_values = self.progress_sheet.get_all_values()
+            if len(all_values) <= 1:
+                return []
+
+            headers = all_values[0]
+            user_id_col = headers.index('user_id') if 'user_id' in headers else 1
+            total_xp_col = headers.index('total_xp') if 'total_xp' in headers else 3
+
+            # 收集所有用户的 XP
+            user_xp_list = []
+            for row in all_values[1:]:
+                if len(row) > max(user_id_col, total_xp_col):
+                    user_id = row[user_id_col]
+                    try:
+                        total_xp = int(row[total_xp_col] or 0)
+                    except (ValueError, TypeError):
+                        total_xp = 0
+                    if user_id:
+                        user_xp_list.append({
+                            'user_id': user_id,
+                            'totalXP': total_xp
+                        })
+
+            # 按 XP 降序排序
+            user_xp_list.sort(key=lambda x: x['totalXP'], reverse=True)
+
+            # 获取用户名称映射
+            try:
+                users = sheets_service.get_all_users()
+                user_map = {u.get('user_id'): u.get('name', '未知') for u in users}
+            except:
+                user_map = {}
+
+            # 构建排行榜数据
+            leaderboard = []
+            for rank, item in enumerate(user_xp_list[:limit], 1):
+                user_id = item['user_id']
+                total_xp = item['totalXP']
+                level = total_xp // 100 + 1
+
+                # 获取用户名
+                username = user_map.get(user_id, user_id)
+
+                leaderboard.append({
+                    'rank': rank,
+                    'username': username,
+                    'totalXP': total_xp,
+                    'level': level
+                })
+
+            return leaderboard
+
+        except Exception as e:
+            print(f"❌ 获取排行榜失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+
 # 单例实例
 progress_service = ProgressService()

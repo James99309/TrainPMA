@@ -78,10 +78,10 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
         className="mb-6"
       >
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Learning Path
+          学习路径
         </h2>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Choose a program to start your journey
+          选择一个课程开始学习
         </p>
       </motion.div>
 

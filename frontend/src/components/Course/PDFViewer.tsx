@@ -46,8 +46,9 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        // Account for padding (16px on each side)
-        setContainerWidth(containerRef.current.clientWidth - 32);
+        // Account for padding (8px on each side on mobile, 16px on desktop)
+        const padding = window.innerWidth < 768 ? 16 : 32;
+        setContainerWidth(containerRef.current.clientWidth - padding);
       }
     };
     updateWidth();
@@ -184,7 +185,7 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
       {/* PDF Content */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto flex items-center justify-center p-4 pt-20 pb-24"
+        className="flex-1 overflow-auto flex items-center justify-center p-2 md:p-4 pt-16 pb-20"
       >
         {loading && (
           <div className="flex flex-col items-center gap-4">
@@ -215,22 +216,26 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
           onDragEnd={(_, info) => handleSwipe(info)}
+          style={{ touchAction: 'pan-y' }}
+          className="relative"
         >
           <Document
             file={`${API_BASE_URL}${course.mediaUrl}`}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             loading={null}
-            className="shadow-2xl rounded-lg overflow-hidden"
+            className="shadow-2xl rounded-lg overflow-hidden pointer-events-none select-none"
           >
             <Page
               pageNumber={currentPage}
               width={containerWidth > 0 ? containerWidth * scale : undefined}
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
               className="bg-white"
             />
           </Document>
+          {/* Transparent overlay to capture swipe gestures */}
+          <div className="absolute inset-0" />
         </motion.div>
       </div>
 
@@ -243,12 +248,12 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
             exit={{ y: 100, opacity: 0 }}
             className="absolute bottom-0 left-0 right-0 z-20 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-lg safe-area-bottom"
           >
-            <div className="flex items-center justify-between p-3 gap-2">
+            <div className="flex items-center justify-between p-2 gap-2">
               {/* Previous button */}
               <motion.button
                 onClick={handlePrevPage}
                 disabled={currentPage <= 1}
-                className={`px-3 py-2 sm:px-5 sm:py-3 rounded-full font-bold text-sm sm:text-base transition flex-shrink-0 ${
+                className={`px-3 py-2 md:px-5 md:py-3 rounded-full font-bold text-xs md:text-base transition flex-shrink-0 ${
                   currentPage <= 1
                     ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
@@ -256,12 +261,12 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
                 whileHover={currentPage > 1 ? { scale: 1.05 } : {}}
                 whileTap={currentPage > 1 ? { scale: 0.95 } : {}}
               >
-                <span className="hidden sm:inline">← 上一页</span>
-                <span className="sm:hidden">←</span>
+                <span className="hidden md:inline">← 上一页</span>
+                <span className="md:hidden">← 上一页</span>
               </motion.button>
 
               {/* Page indicator - hidden on small screens */}
-              <div className="hidden sm:flex items-center gap-1">
+              <div className="hidden md:flex items-center gap-1">
                 {Array.from({ length: Math.min(numPages, 5) }).map((_, i) => {
                   const pageNum =
                     numPages <= 5
@@ -289,14 +294,14 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
               </div>
 
               {/* Simple page counter for mobile */}
-              <div className="sm:hidden text-sm text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">
+              <div className="md:hidden text-xs text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">
                 {currentPage}/{numPages}
               </div>
 
               {/* Next / Complete button */}
               <motion.button
                 onClick={handleNextPage}
-                className={`px-3 py-2 sm:px-5 sm:py-3 rounded-full font-bold text-sm sm:text-base transition flex-shrink-0 ${
+                className={`px-3 py-2 md:px-5 md:py-3 rounded-full font-bold text-xs md:text-base transition flex-shrink-0 ${
                   isLastPage
                     ? 'bg-[#58CC02] text-white'
                     : 'bg-[#1CB0F6] text-white hover:bg-[#1a9ed9]'
@@ -304,8 +309,8 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <span className="hidden sm:inline">{isLastPage ? '完成 ✓' : '下一页 →'}</span>
-                <span className="sm:hidden">{isLastPage ? '✓' : '→'}</span>
+                <span className="hidden md:inline">{isLastPage ? '完成 ✓' : '下一页 →'}</span>
+                <span className="md:hidden">{isLastPage ? '完成 ✓' : '下一页 →'}</span>
               </motion.button>
             </div>
           </motion.div>

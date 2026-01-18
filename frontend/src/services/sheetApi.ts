@@ -25,7 +25,9 @@ export async function recordProgress(data: {
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   try {
-    const response = await fetch(SHEET_URL, {
+    // Use backend API instead of Google Apps Script
+    const API_BASE = import.meta.env.VITE_API_URL || '';
+    const response = await fetch(`${API_BASE}/api/progress/leaderboard`, {
       method: 'GET',
     });
     const result = await response.json();
