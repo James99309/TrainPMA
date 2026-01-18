@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useProgressStore } from '../../stores/progressStore';
+import { useCourseStore } from '../../stores/courseStore';
 import { fetchLeaderboard } from '../../services/sheetApi';
 import type { LeaderboardEntry } from '../../types';
 
@@ -10,6 +11,8 @@ export function LeaderboardView() {
   const [error, setError] = useState(false);
 
   const { username, totalXP } = useProgressStore();
+  const { surveyUserInfo } = useCourseStore();
+  const currentUserId = surveyUserInfo?.user_id;
   const currentUserLevel = Math.floor(totalXP / 100) + 1;
 
   const loadLeaderboard = async () => {
@@ -29,9 +32,9 @@ export function LeaderboardView() {
     loadLeaderboard();
   }, []);
 
-  // Find current user's rank
+  // Find current user's rank by user_id
   const currentUserRank = leaderboard.find(
-    (entry) => entry.username === username
+    (entry) => entry.user_id === currentUserId
   );
 
   const getRankIcon = (rank: number) => {
@@ -135,7 +138,7 @@ export function LeaderboardView() {
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
                 {leaderboard.map((entry, index) => {
-                  const isCurrentUser = entry.username === username;
+                  const isCurrentUser = entry.user_id === currentUserId;
                   const rankStyle = getRankIcon(entry.rank);
 
                   return (

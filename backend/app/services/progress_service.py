@@ -380,6 +380,7 @@ class ProgressService:
 
                 leaderboard.append({
                     'rank': rank,
+                    'user_id': user_id,
                     'username': username,
                     'totalXP': total_xp,
                     'level': level

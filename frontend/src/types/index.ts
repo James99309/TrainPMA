@@ -171,6 +171,7 @@ export interface ReadingSession {
 
 // Leaderboard
 export interface LeaderboardEntry {
+  user_id: string;
   username: string;
   totalXP: number;
   level: number;
