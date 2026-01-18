@@ -17,7 +17,7 @@ interface SyllabusState {
   // Actions
   loadAccessibleSyllabi: (token: string) => Promise<void>;
   setSyllabus: (syllabus: Syllabus | null) => void;
-  loadSyllabusCourses: (syllabusId: string, token: string) => Promise<CourseExtended[]>;
+  loadSyllabusCourses: (syllabusId: string, token: string, forceRefresh?: boolean) => Promise<CourseExtended[]>;
 
   // Progress tracking
   getSyllabusProgress: (syllabusId: string) => SyllabusProgress | undefined;
@@ -77,11 +77,13 @@ export const useSyllabusStore = create<SyllabusState>()(
         set({ currentSyllabus: syllabus });
       },
 
-      loadSyllabusCourses: async (syllabusId: string, token: string) => {
-        // Check cache first
-        const cached = get().syllabusCoursesCache[syllabusId];
-        if (cached) {
-          return cached;
+      loadSyllabusCourses: async (syllabusId: string, token: string, forceRefresh = false) => {
+        // Check cache first (skip if forceRefresh)
+        if (!forceRefresh) {
+          const cached = get().syllabusCoursesCache[syllabusId];
+          if (cached) {
+            return cached;
+          }
         }
 
         try {

@@ -94,6 +94,9 @@ export interface UserProgress {
 
   // 错题记录 (同步到服务器)
   wrongQuestions?: WrongQuestion[];
+
+  // 课程表 XP 统计
+  xpBySyllabus?: Record<string, number>;
 }
 
 // Vocabulary Item
@@ -175,8 +178,31 @@ export interface LeaderboardEntry {
   user_id: string;
   username: string;
   totalXP: number;
+  syllabusXP?: number;   // 课程表排行榜时使用
   level: number;
   rank: number;
+}
+
+// 排行榜响应类型
+export interface LeaderboardResponse {
+  type: 'groups' | 'employees' | 'syllabus' | 'self_only';
+  groups?: GroupLeaderboard[];  // 多个组的排行榜
+  leaderboard?: LeaderboardEntry[];  // 员工或课程表排行榜
+  syllabus_id?: string;
+  syllabus_name?: string;
+  current_user: {
+    rank?: number | null;
+    totalXP: number;
+    syllabusXP?: number;
+    level: number;
+  };
+}
+
+// 分组排行榜类型
+export interface GroupLeaderboard {
+  group_id: string;
+  group_name: string;
+  leaderboard: LeaderboardEntry[];
 }
 
 // Course Icon Types

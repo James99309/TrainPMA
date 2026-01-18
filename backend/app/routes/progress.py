@@ -118,7 +118,9 @@ def save_progress():
             # XP 奖励系统字段
             'lastLoginRewardDate', 'firstPassedQuizzes',
             # 错题记录
-            'wrongQuestions'
+            'wrongQuestions',
+            # 课程表 XP 统计
+            'xpBySyllabus'
         ]
 
         progress = {}
@@ -231,32 +233,44 @@ def sync_progress():
 
 
 @progress_bp.route('/leaderboard', methods=['GET'])
+@jwt_required()
 def get_xp_leaderboard():
     """
-    获取全局 XP 排行榜
+    获取排行榜 - 根据用户类型自动返回不同数据
+
+    Query Params:
+        type: string - 可选: 'auto' | 'syllabus' (默认 'auto')
+        syllabus_id: string - 当 type='syllabus' 时必填
 
     Response:
-        成功: {
-            "success": true,
-            "data": [
-                {
-                    "rank": 1,
-                    "username": "用户名",
-                    "totalXP": 1000,
-                    "level": 11
-                },
-                ...
-            ]
-        }
+        - 客人 (无 type 参数): 返回 groups 类型或 self_only 类型
+        - 员工 (无 type 参数): 返回 employees 类型
+        - type='syllabus': 返回 syllabus 类型
     """
     try:
-        leaderboard = progress_service.get_leaderboard(limit=50)
-        return jsonify({
-            'success': True,
-            'data': leaderboard
-        }), 200
+        leaderboard_type = request.args.get('type', 'auto')
+        syllabus_id = request.args.get('syllabus_id')
+
+        # 获取当前用户信息
+        user_id = get_jwt_identity()
+        if not user_id:
+            return jsonify({'success': False, 'message': '请先登录'}), 401
+
+        # 判断用户类型
+        user_type = 'employee' if user_id.startswith('emp_') else 'guest'
+
+        result = progress_service.get_leaderboard(
+            user_id=user_id,
+            user_type=user_type,
+            leaderboard_type=leaderboard_type,
+            syllabus_id=syllabus_id
+        )
+
+        return jsonify({'success': True, 'data': result}), 200
     except Exception as e:
         print(f"❌ 获取排行榜失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'message': f'获取排行榜失败: {str(e)}'
@@ -326,5 +340,17 @@ def _merge_progress(server: dict, client: dict) -> dict:
     # 客户端数据优先（更新后的状态）
     merged_wrong = {**server_wrong, **client_wrong}
     merged['wrongQuestions'] = list(merged_wrong.values())
+
+    # 课程表 XP - 取较大值（每个课程表独立）
+    server_xp_by_syllabus = server.get('xpBySyllabus', {}) or {}
+    client_xp_by_syllabus = client.get('xpBySyllabus', {}) or {}
+    merged_xp_by_syllabus = {}
+    all_syllabus_ids = set(server_xp_by_syllabus.keys()) | set(client_xp_by_syllabus.keys())
+    for syllabus_id in all_syllabus_ids:
+        merged_xp_by_syllabus[syllabus_id] = max(
+            server_xp_by_syllabus.get(syllabus_id, 0),
+            client_xp_by_syllabus.get(syllabus_id, 0)
+        )
+    merged['xpBySyllabus'] = merged_xp_by_syllabus
 
     return merged

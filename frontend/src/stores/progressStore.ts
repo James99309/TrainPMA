@@ -42,6 +42,10 @@ interface ProgressState extends UserProgress {
   recordFirstQuizPass: (surveyId: string) => boolean;  // 返回是否是首次
   getAchievementXP: (achievementId: string) => number;
 
+  // 课程表 XP Actions
+  xpBySyllabus: Record<string, number>;
+  addSyllabusXP: (syllabusId: string, xp: number) => void;
+
   // Sync Actions
   loadFromServer: (serverProgress: UserProgress) => void;
   getProgressData: () => UserProgress;
@@ -70,6 +74,8 @@ const initialState: UserProgress = {
   lastLoginRewardDate: null,
   firstPassedQuizzes: [],
   firstLoginRewardClaimed: false,
+  // 课程表 XP 统计
+  xpBySyllabus: {},
 };
 
 // 成就XP奖励映射
@@ -129,6 +135,8 @@ const extractProgressData = (state: ProgressState): UserProgress => ({
   firstLoginRewardClaimed: state.firstLoginRewardClaimed,
   // 错题记录 (从 wrongQuestionStore 获取)
   wrongQuestions: useWrongQuestionStore.getState().wrongQuestions,
+  // 课程表 XP 统计
+  xpBySyllabus: state.xpBySyllabus,
 });
 
 export const useProgressStore = create<ProgressState>()(
@@ -480,6 +488,20 @@ export const useProgressStore = create<ProgressState>()(
         return ACHIEVEMENT_XP[achievementId] || 20;
       },
 
+      // 课程表 XP Actions
+      xpBySyllabus: {},
+
+      addSyllabusXP: (syllabusId: string, xp: number) => {
+        set((state) => ({
+          xpBySyllabus: {
+            ...state.xpBySyllabus,
+            [syllabusId]: (state.xpBySyllabus[syllabusId] || 0) + xp
+          }
+          // 注意: 不增加 totalXP，因为课程表 XP 与账户总 XP 独立
+        }));
+        console.log(`[SyllabusXP] 课程表 ${syllabusId} 增加 ${xp} XP`);
+      },
+
       // Load progress from server (used on login)
       loadFromServer: (serverProgress: UserProgress) => {
         console.log('[ProgressSync] ========== LOAD FROM SERVER DEBUG ==========');
@@ -501,6 +523,8 @@ export const useProgressStore = create<ProgressState>()(
           ...serverProgress,
           // 确保 firstLoginRewardClaimed 有明确的值，不依赖 localStorage 残留
           firstLoginRewardClaimed: serverProgress.firstLoginRewardClaimed ?? false,
+          // 确保 xpBySyllabus 有明确的值
+          xpBySyllabus: serverProgress.xpBySyllabus ?? {},
           // Preserve local-only state
           session: get().session,
           username: get().username,

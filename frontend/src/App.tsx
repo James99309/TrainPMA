@@ -597,6 +597,7 @@ function App() {
             <SurveyQuiz
               surveyId={currentSurveyId}
               courseId={currentCourse?.id}
+              syllabusId={currentSyllabus?.id}
               passScore={currentCourse?.quiz?.pass_score || 60}
               onComplete={handleQuizComplete}
               onClose={() => {
@@ -667,6 +668,7 @@ function App() {
             <SurveyQuiz
               surveyId={currentSurveyId}
               courseId={currentCourse?.id}
+              syllabusId={currentSyllabus?.id}
               passScore={currentCourse?.quiz?.pass_score || 60}
               onComplete={handleQuizComplete}
               onClose={() => {

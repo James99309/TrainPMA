@@ -50,6 +50,7 @@ function randomizeQuestions(questions: SurveyQuestion[]): SurveyQuestion[] {
 interface SurveyQuizProps {
   surveyId: string;
   courseId?: string;
+  syllabusId?: string;  // 当前课程表ID，用于记录课程表内XP
   passScore?: number;
   onComplete: (result: {
     passed: boolean;
@@ -63,6 +64,7 @@ interface SurveyQuizProps {
 export function SurveyQuiz({
   surveyId,
   courseId,
+  syllabusId,
   passScore = 60,
   onComplete,
   onClose,
@@ -82,7 +84,7 @@ export function SurveyQuiz({
   const [nextHeartTime, setNextHeartTime] = useState<number | null>(null);
 
   const { surveyUserInfo, updateCourseProgress, courses, markCourseComplete, currentCourse } = useCourseStore();
-  const { loseHeart, hearts, addXP, updateStreak, recordQuizPass, recordQuizFail, completeCourse, exchangeXPForHeart, totalXP, maxHearts, lastHeartLoss, recordFirstQuizPass } = useProgressStore();
+  const { loseHeart, hearts, addXP, addSyllabusXP, updateStreak, recordQuizPass, recordQuizFail, completeCourse, exchangeXPForHeart, totalXP, maxHearts, lastHeartLoss, recordFirstQuizPass } = useProgressStore();
   const { addWrongQuestion } = useWrongQuestionStore();
 
   // 用于跟踪进度是否已恢复，避免重复处理
@@ -346,10 +348,17 @@ export function SurveyQuiz({
 
         // 发放基础XP
         addXP(xpEarned);
+        // 同时记录到课程表XP (如果有课程表ID)
+        if (syllabusId) {
+          addSyllabusXP(syllabusId, xpEarned);
+        }
 
         // 发放奖励XP并显示toast
         if (isFirstPass) {
           addXP(FIRST_PASS_XP);
+          if (syllabusId) {
+            addSyllabusXP(syllabusId, FIRST_PASS_XP);
+          }
           // 延迟显示避免与结果页面冲突
           setTimeout(() => {
             showXPToast({
@@ -362,6 +371,9 @@ export function SurveyQuiz({
 
         if (isPerfect) {
           addXP(PERFECT_SCORE_XP);
+          if (syllabusId) {
+            addSyllabusXP(syllabusId, PERFECT_SCORE_XP);
+          }
           // 满分奖励延迟更长时间显示
           setTimeout(() => {
             showXPToast({

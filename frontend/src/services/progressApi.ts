@@ -32,7 +32,7 @@ export function clearAuthToken(): void {
 /**
  * Get auth token from memory first, then fall back to local storage
  */
-function getAuthToken(): string | null {
+export function getAuthToken(): string | null {
   // Check in-memory token first (set during login for non-rememberMe case)
   if (inMemoryToken) {
     return inMemoryToken;
@@ -303,6 +303,7 @@ const progressApi = {
   forceImmediateSync,
   setAuthToken,
   clearAuthToken,
+  getAuthToken,
 };
 
 export default progressApi;

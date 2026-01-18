@@ -43,6 +43,8 @@ class ProgressService:
         'first_passed_quizzes',    # JSON array - 首次通过的测验ID列表
         # 错题记录
         'wrong_questions',         # JSON array - 错题记录
+        # 课程表 XP 统计
+        'xp_by_syllabus',          # JSON object - {"syllabus-001": 150, "syllabus-002": 80}
         'updated_at'
     ]
 
@@ -226,6 +228,11 @@ class ProgressService:
         except:
             wrong_questions = []
 
+        try:
+            xp_by_syllabus = json.loads(row.get('xp_by_syllabus', '{}') or '{}')
+        except:
+            xp_by_syllabus = {}
+
         return {
             'streak': int(row.get('streak', 0) or 0),
             'lastReadDate': row.get('last_read_date') or None,
@@ -249,6 +256,8 @@ class ProgressService:
             'firstPassedQuizzes': first_passed_quizzes,
             # 错题记录
             'wrongQuestions': wrong_questions,
+            # 课程表 XP 统计
+            'xpBySyllabus': xp_by_syllabus,
         }
 
     def _progress_to_row(self, progress: dict, progress_id: str, user_id: str, updated_at: str) -> list:
@@ -278,6 +287,8 @@ class ProgressService:
             json.dumps(progress.get('firstPassedQuizzes', []), ensure_ascii=False),
             # 错题记录
             json.dumps(progress.get('wrongQuestions', []), ensure_ascii=False),
+            # 课程表 XP 统计
+            json.dumps(progress.get('xpBySyllabus', {}), ensure_ascii=False),
             updated_at
         ]
 
@@ -306,101 +317,312 @@ class ProgressService:
             'firstPassedQuizzes': [],
             # 错题记录
             'wrongQuestions': [],
+            # 课程表 XP 统计
+            'xpBySyllabus': {},
         }
 
 
-    def get_leaderboard(self, limit: int = 50) -> list:
+    def add_syllabus_xp(self, user_id: str, syllabus_id: str, xp: int) -> bool:
         """
-        获取全局 XP 排行榜
+        为用户在特定课程表增加XP
+        注意: 这个 XP 只记录在 xp_by_syllabus 中，不增加到 totalXP
+        因为课程表 XP 与账户总 XP 是独立的
 
         Args:
-            limit: 返回的最大用户数
+            user_id: 用户ID
+            syllabus_id: 课程表ID
+            xp: 要增加的XP
 
         Returns:
-            排行榜数据列表，按 XP 降序排列
+            是否添加成功
         """
         try:
-            from app.services.sheets_service import sheets_service
+            progress = self.get_user_progress(user_id)
+            if not progress:
+                progress = self.get_default_progress()
 
-            # 获取所有用户进度
-            try:
-                all_values = self.progress_sheet.get_all_values()
-            except Exception:
-                return []
+            xp_by_syllabus = progress.get('xpBySyllabus', {})
+            current_xp = xp_by_syllabus.get(syllabus_id, 0)
+            xp_by_syllabus[syllabus_id] = current_xp + xp
+            progress['xpBySyllabus'] = xp_by_syllabus
 
+            return self.save_user_progress(user_id, progress)
+        except Exception as e:
+            print(f"❌ 添加课程表XP失败: {str(e)}")
+            return False
+
+    def _get_all_user_progress(self) -> list:
+        """获取所有用户的进度数据"""
+        try:
+            all_values = self.progress_sheet.get_all_values()
             if not all_values or len(all_values) <= 1:
                 return []
 
             headers = all_values[0]
-            if not headers:
-                return []
-            user_id_col = headers.index('user_id') if 'user_id' in headers else 1
-            total_xp_col = headers.index('total_xp') if 'total_xp' in headers else 3
+            progress_list = []
 
-            # 收集所有用户的 XP
-            user_xp_list = []
             for row in all_values[1:]:
-                if len(row) > max(user_id_col, total_xp_col):
-                    user_id = row[user_id_col]
-                    try:
-                        total_xp = int(row[total_xp_col] or 0)
-                    except (ValueError, TypeError):
-                        total_xp = 0
-                    if user_id:
-                        user_xp_list.append({
-                            'user_id': user_id,
-                            'totalXP': total_xp
-                        })
+                row_dict = {}
+                for i, header in enumerate(headers):
+                    row_dict[header] = row[i] if i < len(row) else ''
+                progress = self._row_to_progress(row_dict)
+                progress['user_id'] = row_dict.get('user_id', '')
+                if progress['user_id']:
+                    progress_list.append(progress)
+
+            return progress_list
+        except Exception as e:
+            print(f"❌ 获取所有用户进度失败: {str(e)}")
+            return []
+
+    def _get_user_map(self) -> dict:
+        """获取用户ID到用户名的映射"""
+        from app.services.sheets_service import sheets_service
+
+        user_map = {}
+        try:
+            # 游客用户
+            users = sheets_service.get_all_users(limit=500)
+            for u in users:
+                user_map[u.get('user_id')] = u.get('name', '未知')
+        except:
+            pass
+
+        try:
+            # 员工用户
+            from app.services.pma_api_service import get_all_employees
+            employees = get_all_employees(limit=500)
+            for emp in employees:
+                emp_name = emp.get('name') or emp.get('real_name') or '未知'
+                user_map[emp.get('user_id')] = emp_name
+        except Exception:
+            pass
+
+        return user_map
+
+    def _build_leaderboard_entry(self, progress: dict, rank: int, user_map: dict) -> dict:
+        """构建排行榜条目"""
+        user_id = progress.get('user_id', '')
+        total_xp = progress.get('totalXP', 0)
+        level = total_xp // 100 + 1
+        username = user_map.get(user_id, user_id)
+
+        return {
+            'rank': rank,
+            'user_id': user_id,
+            'username': username,
+            'totalXP': total_xp,
+            'level': level
+        }
+
+    def _get_user_rank_info(self, user_id: str, progress_list: list = None) -> dict:
+        """获取用户的排名信息"""
+        if progress_list is None:
+            progress_list = self._get_all_user_progress()
+
+        # 按 XP 降序排序
+        sorted_list = sorted(progress_list, key=lambda x: x.get('totalXP', 0), reverse=True)
+
+        # 查找用户排名
+        user_progress = None
+        user_rank = None
+        for idx, p in enumerate(sorted_list, 1):
+            if p.get('user_id') == user_id:
+                user_progress = p
+                user_rank = idx
+                break
+
+        if user_progress:
+            return {
+                'rank': user_rank,
+                'totalXP': user_progress.get('totalXP', 0),
+                'level': user_progress.get('totalXP', 0) // 100 + 1
+            }
+        else:
+            return {
+                'rank': None,
+                'totalXP': 0,
+                'level': 1
+            }
+
+    def _get_guest_leaderboard(self, user_id: str, limit: int) -> dict:
+        """客人排行榜 - 按组分别显示"""
+        from app.services.user_group_service import user_group_service
+
+        # 获取用户所属的所有组
+        user_groups = user_group_service.get_user_groups_for_user(user_id)
+
+        if not user_groups:
+            # 不在任何组，只返回自己
+            return {
+                'type': 'self_only',
+                'current_user': self._get_user_rank_info(user_id)
+            }
+
+        # 获取所有进度和用户映射
+        all_progress = self._get_all_user_progress()
+        user_map = self._get_user_map()
+        progress_map = {p['user_id']: p for p in all_progress}
+
+        # 为每个组生成排行榜
+        groups_data = []
+        for group in user_groups:
+            member_ids = group.get('member_ids', [])
+
+            # 获取组内成员的进度
+            group_progress = []
+            for member_id in member_ids:
+                if member_id in progress_map:
+                    group_progress.append(progress_map[member_id])
+                else:
+                    # 成员没有进度记录，使用默认值
+                    group_progress.append({
+                        'user_id': member_id,
+                        'totalXP': 0,
+                        'level': 1
+                    })
 
             # 按 XP 降序排序
-            user_xp_list.sort(key=lambda x: x['totalXP'], reverse=True)
+            group_progress.sort(key=lambda x: x.get('totalXP', 0), reverse=True)
 
-            # 获取用户名称映射（游客 + 员工）
-            user_map = {}
-            try:
-                # 游客用户
-                users = sheets_service.get_all_users(limit=500)
-                for u in users:
-                    user_map[u.get('user_id')] = u.get('name', '未知')
-            except:
-                pass
-
-            try:
-                # 员工用户
-                from app.services.pma_api_service import get_all_employees
-                employees = get_all_employees(limit=500)
-                for emp in employees:
-                    # PMA API 可能返回 name 或 real_name
-                    emp_name = emp.get('name') or emp.get('real_name') or '未知'
-                    user_map[emp.get('user_id')] = emp_name
-            except Exception:
-                pass
-
-            # 构建排行榜数据
+            # 构建排行榜
             leaderboard = []
-            for rank, item in enumerate(user_xp_list[:limit], 1):
-                user_id = item['user_id']
-                total_xp = item['totalXP']
-                level = total_xp // 100 + 1
+            for idx, p in enumerate(group_progress[:limit], 1):
+                leaderboard.append(self._build_leaderboard_entry(p, idx, user_map))
 
-                # 获取用户名
-                username = user_map.get(user_id, user_id)
+            groups_data.append({
+                'group_id': group['id'],
+                'group_name': group['name'],
+                'leaderboard': leaderboard
+            })
 
-                leaderboard.append({
-                    'rank': rank,
-                    'user_id': user_id,
-                    'username': username,
-                    'totalXP': total_xp,
-                    'level': level
+        return {
+            'type': 'groups',
+            'groups': groups_data,
+            'current_user': self._get_user_rank_info(user_id, all_progress)
+        }
+
+    def _get_employee_leaderboard(self, user_id: str, limit: int) -> dict:
+        """员工排行榜 - 仅员工"""
+        all_progress = self._get_all_user_progress()
+
+        # 过滤 emp_ 前缀的用户
+        employee_progress = [p for p in all_progress if p.get('user_id', '').startswith('emp_')]
+
+        # 按 XP 降序排序
+        employee_progress.sort(key=lambda x: x.get('totalXP', 0), reverse=True)
+
+        # 获取用户映射
+        user_map = self._get_user_map()
+
+        # 构建排行榜
+        leaderboard = []
+        for idx, p in enumerate(employee_progress[:limit], 1):
+            leaderboard.append(self._build_leaderboard_entry(p, idx, user_map))
+
+        return {
+            'type': 'employees',
+            'leaderboard': leaderboard,
+            'current_user': self._get_user_rank_info(user_id, employee_progress)
+        }
+
+    def _get_syllabus_leaderboard(self, syllabus_id: str, user_id: str, limit: int) -> dict:
+        """课程表排行榜 - 按课程表内累计XP排序，员工客人混合"""
+        all_progress = self._get_all_user_progress()
+
+        # 过滤有该课程表XP的用户
+        syllabus_progress = []
+        for p in all_progress:
+            xp_by_syllabus = p.get('xpBySyllabus', {})
+            syllabus_xp = xp_by_syllabus.get(syllabus_id, 0)
+            if syllabus_xp > 0:
+                syllabus_progress.append({
+                    **p,
+                    'syllabusXP': syllabus_xp
                 })
 
-            return leaderboard
+        # 按 syllabusXP 排序
+        syllabus_progress.sort(key=lambda x: x.get('syllabusXP', 0), reverse=True)
+
+        # 获取用户映射
+        user_map = self._get_user_map()
+
+        # 构建排行榜
+        leaderboard = []
+        for idx, p in enumerate(syllabus_progress[:limit], 1):
+            entry = self._build_leaderboard_entry(p, idx, user_map)
+            entry['syllabusXP'] = p.get('syllabusXP', 0)
+            leaderboard.append(entry)
+
+        # 获取课程表名称
+        from app.services.syllabus_service import syllabus_service
+        syllabus = syllabus_service.get_syllabus(syllabus_id)
+        syllabus_name = syllabus.get('name', '未知课程表') if syllabus else '未知课程表'
+
+        # 获取当前用户的课程表排名信息
+        current_user_info = {
+            'rank': None,
+            'totalXP': 0,
+            'syllabusXP': 0,
+            'level': 1
+        }
+        for idx, p in enumerate(syllabus_progress, 1):
+            if p.get('user_id') == user_id:
+                current_user_info = {
+                    'rank': idx,
+                    'totalXP': p.get('totalXP', 0),
+                    'syllabusXP': p.get('syllabusXP', 0),
+                    'level': p.get('totalXP', 0) // 100 + 1
+                }
+                break
+
+        return {
+            'type': 'syllabus',
+            'syllabus_id': syllabus_id,
+            'syllabus_name': syllabus_name,
+            'leaderboard': leaderboard,
+            'current_user': current_user_info
+        }
+
+    def get_leaderboard(
+        self,
+        user_id: str,
+        user_type: str,
+        leaderboard_type: str = 'auto',
+        syllabus_id: str = None,
+        limit: int = 50
+    ) -> dict:
+        """
+        根据用户类型和请求类型返回不同的排行榜
+
+        Args:
+            user_id: 用户ID
+            user_type: 用户类型 ('guest' | 'employee')
+            leaderboard_type: 排行榜类型 ('auto' | 'syllabus')
+            syllabus_id: 课程表ID (当 leaderboard_type='syllabus' 时必填)
+            limit: 返回的最大用户数
+
+        Returns:
+            排行榜数据
+        """
+        try:
+            if leaderboard_type == 'syllabus' and syllabus_id:
+                return self._get_syllabus_leaderboard(syllabus_id, user_id, limit)
+
+            if user_type == 'employee':
+                return self._get_employee_leaderboard(user_id, limit)
+
+            # guest
+            return self._get_guest_leaderboard(user_id, limit)
 
         except Exception as e:
             print(f"❌ 获取排行榜失败: {str(e)}")
             import traceback
             traceback.print_exc()
-            return []
+            return {
+                'type': 'self_only',
+                'current_user': {'rank': None, 'totalXP': 0, 'level': 1}
+            }
 
 
 # 单例实例

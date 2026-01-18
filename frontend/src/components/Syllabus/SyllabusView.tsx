@@ -26,7 +26,7 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const coursesData = await loadSyllabusCourses(syllabus.id, token);
+      const coursesData = await loadSyllabusCourses(syllabus.id, token, true);
       const sorted = [...coursesData].sort(
         (a, b) => (a.order_in_syllabus || a.order || 0) - (b.order_in_syllabus || b.order || 0)
       );
