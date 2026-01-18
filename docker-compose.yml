@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./courses:/usr/share/nginx/html/courses:ro
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    ports:
+      - "5007:5007"
+    volumes:
+      - ./backend/credentials:/app/credentials:ro
+      - ./courses:/app/courses:rw
+      - ./backend/data:/app/data:rw
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5007
+      - COURSES_DIR=/app/courses
+    restart: unless-stopped
+
+volumes:
+  courses:

@@ -1,0 +1,95 @@
+{
+  "courses": [
+    {
+      "id": "course-001",
+      "title": "Python 基础教程",
+      "description": "从零开始学习 Python 编程语言的基础知识",
+      "type": "pdf",
+      "mediaUrl": "/courses/python-basics/content.pdf",
+      "thumbnailUrl": "/courses/python-basics/thumbnail.png",
+      "totalPages": 25,
+      "duration_minutes": 30,
+      "order": 1,
+      "quiz": {
+        "survey_id": "python-basics-quiz",
+        "pass_score": 60
+      }
+    },
+    {
+      "id": "course-002",
+      "title": "React 入门指南",
+      "description": "学习 React 前端框架的核心概念",
+      "type": "ppt",
+      "mediaUrl": "/courses/react-intro/slides",
+      "thumbnailUrl": "/courses/react-intro/thumbnail.png",
+      "totalPages": 15,
+      "duration_minutes": 20,
+      "order": 2,
+      "slides": [
+        { "page": 1, "text": "React 简介", "imageUrl": "/courses/react-intro/slides/01.png" },
+        { "page": 2, "text": "组件概念", "imageUrl": "/courses/react-intro/slides/02.png" },
+        { "page": 3, "text": "JSX 语法", "imageUrl": "/courses/react-intro/slides/03.png" },
+        { "page": 4, "text": "Props 与 State", "imageUrl": "/courses/react-intro/slides/04.png" },
+        { "page": 5, "text": "事件处理", "imageUrl": "/courses/react-intro/slides/05.png" },
+        { "page": 6, "text": "条件渲染", "imageUrl": "/courses/react-intro/slides/06.png" },
+        { "page": 7, "text": "列表渲染", "imageUrl": "/courses/react-intro/slides/07.png" },
+        { "page": 8, "text": "表单处理", "imageUrl": "/courses/react-intro/slides/08.png" },
+        { "page": 9, "text": "Hooks 简介", "imageUrl": "/courses/react-intro/slides/09.png" },
+        { "page": 10, "text": "useState", "imageUrl": "/courses/react-intro/slides/10.png" },
+        { "page": 11, "text": "useEffect", "imageUrl": "/courses/react-intro/slides/11.png" },
+        { "page": 12, "text": "自定义 Hooks", "imageUrl": "/courses/react-intro/slides/12.png" },
+        { "page": 13, "text": "组件生命周期", "imageUrl": "/courses/react-intro/slides/13.png" },
+        { "page": 14, "text": "最佳实践", "imageUrl": "/courses/react-intro/slides/14.png" },
+        { "page": 15, "text": "总结与练习", "imageUrl": "/courses/react-intro/slides/15.png" }
+      ],
+      "quiz": {
+        "survey_id": "react-intro-quiz",
+        "pass_score": 70
+      }
+    },
+    {
+      "id": "course-003",
+      "title": "数据库基础",
+      "description": "SQL 数据库的基本概念和操作",
+      "type": "pdf",
+      "mediaUrl": "/courses/database-basics/content.pdf",
+      "thumbnailUrl": "/courses/database-basics/thumbnail.png",
+      "totalPages": 20,
+      "duration_minutes": 25,
+      "order": 3,
+      "quiz": {
+        "survey_id": "database-basics-quiz",
+        "pass_score": 60
+      }
+    },
+    {
+      "id": "course-004",
+      "title": "Git 版本控制",
+      "description": "学习 Git 的基本操作和团队协作",
+      "type": "ppt",
+      "mediaUrl": "/courses/git-basics/slides",
+      "thumbnailUrl": "/courses/git-basics/thumbnail.png",
+      "totalPages": 12,
+      "duration_minutes": 15,
+      "order": 4,
+      "slides": [
+        { "page": 1, "text": "什么是 Git", "imageUrl": "/courses/git-basics/slides/01.png" },
+        { "page": 2, "text": "安装配置", "imageUrl": "/courses/git-basics/slides/02.png" },
+        { "page": 3, "text": "基本命令", "imageUrl": "/courses/git-basics/slides/03.png" },
+        { "page": 4, "text": "分支管理", "imageUrl": "/courses/git-basics/slides/04.png" },
+        { "page": 5, "text": "远程仓库", "imageUrl": "/courses/git-basics/slides/05.png" },
+        { "page": 6, "text": "合并与冲突", "imageUrl": "/courses/git-basics/slides/06.png" },
+        { "page": 7, "text": "Git Flow", "imageUrl": "/courses/git-basics/slides/07.png" },
+        { "page": 8, "text": "Pull Request", "imageUrl": "/courses/git-basics/slides/08.png" },
+        { "page": 9, "text": "代码审查", "imageUrl": "/courses/git-basics/slides/09.png" },
+        { "page": 10, "text": "CI/CD 集成", "imageUrl": "/courses/git-basics/slides/10.png" },
+        { "page": 11, "text": "常见问题", "imageUrl": "/courses/git-basics/slides/11.png" },
+        { "page": 12, "text": "总结", "imageUrl": "/courses/git-basics/slides/12.png" }
+      ],
+      "quiz": {
+        "survey_id": "git-basics-quiz",
+        "pass_score": 60
+      }
+    }
+  ]
+}
