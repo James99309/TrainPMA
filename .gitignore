@@ -47,3 +47,7 @@ backend/credentials/*
 # Course files (optional - remove this line if you want to track course files)
 courses/*
 !courses/.gitkeep
+
+# User data files (not tracked to prevent data loss on git pull)
+backend/data/syllabi.json
+backend/data/user_groups.json
