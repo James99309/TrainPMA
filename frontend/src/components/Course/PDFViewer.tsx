@@ -100,7 +100,7 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
   };
 
   // 双指缩放处理
-  const getTouchDistance = (touches: TouchList) => {
+  const getTouchDistance = (touches: React.TouchList) => {
     if (touches.length < 2) return null;
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
