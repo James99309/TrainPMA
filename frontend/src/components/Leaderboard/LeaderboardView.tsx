@@ -51,7 +51,7 @@ export function LeaderboardView() {
           animate={{ opacity: 1, y: 0 }}
         >
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center justify-center gap-2">
-            <span className="text-3xl">🏆</span> Leaderboard
+            <span className="text-3xl">🏆</span> 排行榜
           </h1>
         </motion.div>
 
@@ -64,7 +64,7 @@ export function LeaderboardView() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white/80 text-sm">Your Rank</p>
+                <p className="text-white/80 text-sm">你的排名</p>
                 <p className="text-3xl font-bold">#{currentUserRank.rank}</p>
               </div>
               <div className="text-right">
@@ -82,9 +82,9 @@ export function LeaderboardView() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <p className="text-gray-500 dark:text-gray-400">Keep learning to appear on the leaderboard!</p>
+            <p className="text-gray-500 dark:text-gray-400">继续学习，登上排行榜！</p>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              Current: Lv.{currentUserLevel} · {totalXP} XP
+              当前：Lv.{currentUserLevel} · {totalXP} XP
             </p>
           </motion.div>
         )}
@@ -97,7 +97,7 @@ export function LeaderboardView() {
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             />
-            <p className="text-gray-500 dark:text-gray-400 mt-4">Loading leaderboard...</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-4">加载中...</p>
           </div>
         )}
 
@@ -108,14 +108,14 @@ export function LeaderboardView() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <p className="text-gray-500 dark:text-gray-400 mb-4">Failed to load leaderboard</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">加载失败</p>
             <motion.button
               onClick={loadLeaderboard}
               className="px-6 py-2 bg-[#58CC02] text-white rounded-xl font-medium"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              Retry
+              重试
             </motion.button>
           </motion.div>
         )}
@@ -130,7 +130,7 @@ export function LeaderboardView() {
           >
             {leaderboard.length === 0 ? (
               <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                No data available yet
+                暂无数据
               </div>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -161,10 +161,10 @@ export function LeaderboardView() {
                           isCurrentUser ? 'text-[#58CC02]' : 'text-gray-900 dark:text-white'
                         }`}>
                           {entry.username}
-                          {isCurrentUser && ' (You)'}
+                          {isCurrentUser && '（我）'}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Level {entry.level}
+                          等级 {entry.level}
                         </p>
                       </div>
 

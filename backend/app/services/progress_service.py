@@ -349,12 +349,24 @@ class ProgressService:
             # 按 XP 降序排序
             user_xp_list.sort(key=lambda x: x['totalXP'], reverse=True)
 
-            # 获取用户名称映射
+            # 获取用户名称映射（游客 + 员工）
+            user_map = {}
             try:
-                users = sheets_service.get_all_users()
-                user_map = {u.get('user_id'): u.get('name', '未知') for u in users}
+                # 游客用户
+                users = sheets_service.get_all_users(limit=500)
+                for u in users:
+                    user_map[u.get('user_id')] = u.get('name', '未知')
             except:
-                user_map = {}
+                pass
+
+            try:
+                # 员工用户
+                from app.services.pma_api_service import get_all_employees
+                employees = get_all_employees(limit=500)
+                for emp in employees:
+                    user_map[emp.get('user_id')] = emp.get('name', '未知')
+            except:
+                pass
 
             # 构建排行榜数据
             leaderboard = []
