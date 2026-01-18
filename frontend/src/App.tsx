@@ -62,7 +62,7 @@ function App() {
   const [practiceQuestions, setPracticeQuestions] = useState<WrongQuestion[]>([]);
   const [currentSyllabus, setCurrentSyllabus] = useState<Syllabus | null>(null);
 
-  const { username, setUsername, checkAndRestoreHearts, darkMode, loadFromServer, claimDailyLoginReward } = useProgressStore();
+  const { username, setUsername, checkAndRestoreHearts, darkMode, loadFromServer, claimDailyLoginReward, claimFirstLoginReward } = useProgressStore();
   const { currentCourse, setCourse, setSurveyUserInfo, clearUserInfo, clearCourseProgress, surveyUserInfo } = useCourseStore();
   const { markCourseCompletedInSyllabus, markCourseStartedInSyllabus, clearState: clearSyllabusState } = useSyllabusStore();
   const chapters = bookData.chapters as Chapter[];
@@ -136,34 +136,47 @@ function App() {
   // NOTE: Removed useEffect that was overwriting surveyUserInfo with only { name: username }
   // This was causing the token to be lost after login
 
-  // Check and claim daily login reward
+  // Check and claim login rewards (first login + daily)
   useEffect(() => {
     if (username && !hasClaimedLoginReward.current) {
       hasClaimedLoginReward.current = true;
       // Small delay to ensure UI is ready
       const timer = setTimeout(() => {
-        const result = claimDailyLoginReward();
-        if (result.earned) {
+        // First check first login reward
+        const firstLoginResult = claimFirstLoginReward();
+        if (firstLoginResult.earned) {
           showXPToast({
-            amount: result.xp,
-            reason: '每日登录奖励',
-            icon: '📅',
+            amount: firstLoginResult.xp,
+            reason: '欢迎加入！首次登录奖励',
+            icon: '🎉',
           });
-          if (result.streakBonus > 0) {
-            // Show streak bonus after a short delay
-            setTimeout(() => {
-              showXPToast({
-                amount: result.streakBonus,
-                reason: `连续学习加成`,
-                icon: '🔥',
-              });
-            }, 2800);
-          }
         }
+
+        // Then check daily login reward (delay if first login was shown)
+        setTimeout(() => {
+          const dailyResult = claimDailyLoginReward();
+          if (dailyResult.earned) {
+            showXPToast({
+              amount: dailyResult.xp,
+              reason: '每日登录奖励',
+              icon: '📅',
+            });
+            if (dailyResult.streakBonus > 0) {
+              // Show streak bonus after a short delay
+              setTimeout(() => {
+                showXPToast({
+                  amount: dailyResult.streakBonus,
+                  reason: `连续学习加成`,
+                  icon: '🔥',
+                });
+              }, 2800);
+            }
+          }
+        }, firstLoginResult.earned ? 2800 : 0);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [username, claimDailyLoginReward]);
+  }, [username, claimDailyLoginReward, claimFirstLoginReward]);
 
   // Handle login with UserInfo (supports both guest and employee)
   const handleLogin = (userInfo: UserInfo | string) => {
@@ -360,6 +373,8 @@ function App() {
     clearUserInfo();
     // Reset auth restored flag
     hasRestoredAuth.current = false;
+    // Reset login reward flag so new user can claim
+    hasClaimedLoginReward.current = false;
     // Reset view state
     setCurrentView('syllabusList');
     setCourse(null);

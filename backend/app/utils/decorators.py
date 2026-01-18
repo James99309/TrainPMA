@@ -8,16 +8,18 @@ def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         api_key = request.headers.get('X-API-Key')
-        expected_key = os.getenv('API_KEY')
+        primary_key = os.getenv('API_KEY')
+        # 支持多个有效密码
+        valid_keys = [primary_key, 'Evertac2026']
+        valid_keys = [k for k in valid_keys if k]  # 过滤掉 None
 
         # 调试信息
         print('=== API Key 验证 ===')
         print(f'请求路径: {request.path}')
         print(f'收到的 Key: {api_key[:20] if api_key else "None"}...')
-        print(f'期望的 Key: {expected_key[:20] if expected_key else "None"}...')
-        print(f'匹配: {api_key == expected_key}')
+        print(f'匹配: {api_key in valid_keys}')
 
-        if not api_key or api_key != expected_key:
+        if not api_key or api_key not in valid_keys:
             print('❌ API Key 验证失败')
             return jsonify({'error': 'Invalid or missing API key'}), 401
 

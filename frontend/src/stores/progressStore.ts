@@ -38,6 +38,7 @@ interface ProgressState extends UserProgress {
 
   // XP 奖励系统 Actions
   claimDailyLoginReward: () => { earned: boolean; xp: number; streakBonus: number };
+  claimFirstLoginReward: () => { earned: boolean; xp: number };
   recordFirstQuizPass: (surveyId: string) => boolean;  // 返回是否是首次
   getAchievementXP: (achievementId: string) => number;
 
@@ -68,6 +69,7 @@ const initialState: UserProgress = {
   // XP 奖励系统字段
   lastLoginRewardDate: null,
   firstPassedQuizzes: [],
+  firstLoginRewardClaimed: false,
 };
 
 // 成就XP奖励映射
@@ -93,6 +95,8 @@ const ACHIEVEMENT_XP: Record<string, number> = {
 
 // 每日登录奖励
 const DAILY_LOGIN_XP = 20;
+// 首次登录奖励
+const FIRST_LOGIN_XP = 200;
 // 连续学习加成系数
 const STREAK_BONUS_MULTIPLIER = 5;
 
@@ -122,6 +126,7 @@ const extractProgressData = (state: ProgressState): UserProgress => ({
   // XP 奖励系统字段
   lastLoginRewardDate: state.lastLoginRewardDate,
   firstPassedQuizzes: state.firstPassedQuizzes,
+  firstLoginRewardClaimed: state.firstLoginRewardClaimed,
   // 错题记录 (从 wrongQuestionStore 获取)
   wrongQuestions: useWrongQuestionStore.getState().wrongQuestions,
 });
@@ -439,6 +444,22 @@ export const useProgressStore = create<ProgressState>()(
         return { earned: true, xp, streakBonus };
       },
 
+      claimFirstLoginReward: () => {
+        const { firstLoginRewardClaimed, addXP } = get();
+
+        if (firstLoginRewardClaimed) {
+          return { earned: false, xp: 0 };
+        }
+
+        const xp = FIRST_LOGIN_XP;
+        addXP(xp);
+        set({ firstLoginRewardClaimed: true });
+
+        console.log(`[FirstLogin] 首次登录奖励 +${xp} XP`);
+
+        return { earned: true, xp };
+      },
+
       recordFirstQuizPass: (surveyId: string) => {
         const { firstPassedQuizzes } = get();
 
@@ -478,6 +499,8 @@ export const useProgressStore = create<ProgressState>()(
         });
         set({
           ...serverProgress,
+          // 确保 firstLoginRewardClaimed 有明确的值，不依赖 localStorage 残留
+          firstLoginRewardClaimed: serverProgress.firstLoginRewardClaimed ?? false,
           // Preserve local-only state
           session: get().session,
           username: get().username,

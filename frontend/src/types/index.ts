@@ -90,6 +90,7 @@ export interface UserProgress {
   // XP 奖励系统字段
   lastLoginRewardDate: string | null;  // 上次领取登录奖励日期
   firstPassedQuizzes: string[];        // 首次通过的测验ID列表
+  firstLoginRewardClaimed?: boolean;   // 是否已领取首次登录奖励
 
   // 错题记录 (同步到服务器)
   wrongQuestions?: WrongQuestion[];
