@@ -387,6 +387,7 @@ export interface UserBasicInfo {
 export interface SyllabusProgress {
   syllabusId: string;
   completedCourses: string[];
+  startedCourses: string[];  // 已进入的课程（用于区分"未开始"和"进行中"）
   currentCourseId?: string;
   startedAt?: string;
   lastAccessedAt?: string;

@@ -64,7 +64,7 @@ function App() {
 
   const { username, setUsername, checkAndRestoreHearts, darkMode, loadFromServer, claimDailyLoginReward } = useProgressStore();
   const { currentCourse, setCourse, setSurveyUserInfo, clearUserInfo, clearCourseProgress, surveyUserInfo } = useCourseStore();
-  const { markCourseCompletedInSyllabus, clearState: clearSyllabusState } = useSyllabusStore();
+  const { markCourseCompletedInSyllabus, markCourseStartedInSyllabus, clearState: clearSyllabusState } = useSyllabusStore();
   const chapters = bookData.chapters as Chapter[];
   const hasClaimedLoginReward = useRef(false);
   const hasRestoredAuth = useRef(false);
@@ -167,6 +167,18 @@ function App() {
 
   // Handle login with UserInfo (supports both guest and employee)
   const handleLogin = (userInfo: UserInfo | string) => {
+    // DEBUG: Show localStorage state at login
+    console.log('[Login] ========== LOGIN DEBUG START ==========');
+    console.log('[Login] localStorage keys at login:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('stargirl')) {
+        console.log(`  - ${key}:`, localStorage.getItem(key)?.substring(0, 100) + '...');
+      }
+    }
+    console.log('[Login] Current syllabusProgress:', useSyllabusStore.getState().syllabusProgress);
+    console.log('[Login] Current courseProgress:', useCourseStore.getState().courseProgress);
+
     // Support both old string format and new UserInfo format
     if (typeof userInfo === 'string') {
       // Clear old user data if different user is logging in
@@ -223,6 +235,11 @@ function App() {
         console.log('[Auth] Clearing old user data');
         useProgressStore.getState().logout();
         useWrongQuestionStore.getState().clearAll();
+        // 清除课程和大纲进度
+        localStorage.removeItem('stargirl-courses');
+        localStorage.removeItem('stargirl-syllabi');
+        useCourseStore.getState().clearCourseProgress();
+        useSyllabusStore.getState().clearState();
       }
 
       setUsername(userInfo.name);
@@ -301,22 +318,46 @@ function App() {
     console.log('[Logout] Now clearing local data...');
     console.log('========== LOGOUT DEBUG END ==========');
 
+    // DEBUG: Show all stargirl-related localStorage keys before clearing
+    console.log('[Logout] ========== CLEARING DATA ==========');
+    console.log('[Logout] localStorage keys before clear:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('stargirl')) {
+        console.log(`  - ${key}:`, localStorage.getItem(key)?.substring(0, 100) + '...');
+      }
+    }
+
     // Clear auth data from localStorage and in-memory
     authApi.clearAuthData();
     clearAuthToken();  // Clear in-memory token in progressApi
     // Clear progress store (including localStorage) to prevent data pollution
+    console.log('[Logout] Calling progressStore.logout()...');
     useProgressStore.getState().logout();
     // Clear course progress to prevent data pollution between users
+    console.log('[Logout] Removing stargirl-courses from localStorage...');
     localStorage.removeItem('stargirl-courses');
     clearCourseProgress();
+    // Clear syllabus progress to prevent data pollution between users
+    console.log('[Logout] Removing stargirl-syllabi from localStorage...');
+    localStorage.removeItem('stargirl-syllabi');
+    clearSyllabusState();
+
+    // DEBUG: Verify localStorage is cleared
+    console.log('[Logout] localStorage keys after clear:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('stargirl')) {
+        console.log(`  - ${key}: STILL EXISTS!`, localStorage.getItem(key)?.substring(0, 100) + '...');
+      }
+    }
+    console.log('[Logout] ========== CLEAR COMPLETE ==========');
     // Clear wrong questions data
     useWrongQuestionStore.getState().clearAll();
     // Clear username from progress store (redundant after logout(), but kept for clarity)
     setUsername('');
     // Clear user info from course store
     clearUserInfo();
-    // Clear syllabus state
-    clearSyllabusState();
     // Reset auth restored flag
     hasRestoredAuth.current = false;
     // Reset view state
@@ -425,6 +466,10 @@ function App() {
   };
 
   const handleSelectCourseFromSyllabus = (course: CourseExtended) => {
+    // 标记课程为已开始
+    if (currentSyllabus) {
+      markCourseStartedInSyllabus(currentSyllabus.id, course.id);
+    }
     setCourse(course);
     setCurrentView('courseView');
   };

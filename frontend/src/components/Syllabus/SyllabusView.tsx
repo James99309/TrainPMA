@@ -19,6 +19,7 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
     loadSyllabusCourses,
     getSyllabusProgress,
     isCourseUnlockedInSyllabus,
+    isCourseStartedInSyllabus,
     getSyllabusCompletionPercentage,
   } = useSyllabusStore();
 
@@ -102,7 +103,8 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
           {courses.map((course, index) => {
             const isCompleted = completedCourses.includes(course.id);
             const isUnlocked = isCourseUnlockedInSyllabus(syllabus.id, course.id);
-            const isCurrent = isUnlocked && !isCompleted;
+            const isStarted = isCourseStartedInSyllabus(syllabus.id, course.id);
+            const isCurrent = isUnlocked && !isCompleted && isStarted;  // 只有已进入的才是"进行中"
             const position = getNodePosition(index);
 
             // Calculate progress for this course (mock - can be replaced with actual progress)
@@ -138,7 +140,7 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
                         className="text-gray-300 dark:text-gray-600"
                       />
                       {/* Progress ring */}
-                      {(isCompleted || isCurrent) && (
+                      {(isCompleted || isCurrent || (isUnlocked && !isStarted)) && (
                         <motion.circle
                           cx="56"
                           cy="56"
@@ -147,7 +149,13 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
                           strokeWidth="8"
                           fill="none"
                           strokeLinecap="round"
-                          className={isCompleted ? 'text-yellow-400' : 'text-green-500'}
+                          className={
+                            isCompleted
+                              ? 'text-yellow-400'    // 已完成：黄色
+                              : isCurrent
+                              ? 'text-green-500'     // 进行中：绿色
+                              : 'text-blue-400'      // 可开始：蓝色
+                          }
                           initial={{ strokeDasharray: circumference, strokeDashoffset: circumference }}
                           animate={{ strokeDashoffset }}
                           transition={{ duration: 1, ease: 'easeOut', delay: index * 0.1 }}
@@ -162,10 +170,12 @@ export function SyllabusView({ syllabus, token, onBack, onSelectCourse }: Syllab
                         w-20 h-20 rounded-full flex items-center justify-center
                         transition-all duration-300
                         ${isCompleted
-                          ? 'bg-green-500'
+                          ? 'bg-green-500'        // 已完成：绿色
                           : isCurrent
-                          ? 'bg-green-500'
-                          : 'bg-gray-300 dark:bg-gray-600'
+                          ? 'bg-green-500'        // 进行中：绿色
+                          : isUnlocked
+                          ? 'bg-blue-500'         // 可开始：蓝色
+                          : 'bg-gray-300 dark:bg-gray-600'  // 锁定：灰色
                         }
                         ${isUnlocked ? 'group-hover:scale-105 cursor-pointer' : 'cursor-not-allowed'}
                       `}

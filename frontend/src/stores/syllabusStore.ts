@@ -23,6 +23,8 @@ interface SyllabusState {
   getSyllabusProgress: (syllabusId: string) => SyllabusProgress | undefined;
   updateSyllabusProgress: (syllabusId: string, progress: Partial<SyllabusProgress>) => void;
   markCourseCompletedInSyllabus: (syllabusId: string, courseId: string) => void;
+  markCourseStartedInSyllabus: (syllabusId: string, courseId: string) => void;
+  isCourseStartedInSyllabus: (syllabusId: string, courseId: string) => boolean;
 
   // Computed
   isCourseUnlockedInSyllabus: (syllabusId: string, courseId: string) => boolean;
@@ -124,6 +126,7 @@ export const useSyllabusStore = create<SyllabusState>()(
                 ...progress,
                 syllabusId,
                 completedCourses: progress.completedCourses ?? existingProgress?.completedCourses ?? [],
+                startedCourses: progress.startedCourses ?? existingProgress?.startedCourses ?? [],
                 lastAccessedAt: new Date().toISOString(),
               },
             },
@@ -136,6 +139,7 @@ export const useSyllabusStore = create<SyllabusState>()(
           const currentProgress = state.syllabusProgress[syllabusId] || {
             syllabusId,
             completedCourses: [],
+            startedCourses: [],
           };
 
           if (!currentProgress.completedCourses.includes(courseId)) {
@@ -152,6 +156,37 @@ export const useSyllabusStore = create<SyllabusState>()(
           }
           return state;
         });
+      },
+
+      markCourseStartedInSyllabus: (syllabusId, courseId) => {
+        set((state) => {
+          const currentProgress = state.syllabusProgress[syllabusId] || {
+            syllabusId,
+            completedCourses: [],
+            startedCourses: [],
+          };
+
+          const startedCourses = currentProgress.startedCourses || [];
+          if (!startedCourses.includes(courseId)) {
+            return {
+              syllabusProgress: {
+                ...state.syllabusProgress,
+                [syllabusId]: {
+                  ...currentProgress,
+                  startedCourses: [...startedCourses, courseId],
+                  lastAccessedAt: new Date().toISOString(),
+                },
+              },
+            };
+          }
+          return state;
+        });
+      },
+
+      isCourseStartedInSyllabus: (syllabusId, courseId) => {
+        const progress = get().syllabusProgress[syllabusId];
+        const startedCourses = progress?.startedCourses || [];
+        return startedCourses.includes(courseId);
       },
 
       isCourseUnlockedInSyllabus: (syllabusId, courseId) => {
@@ -220,13 +255,17 @@ export const useSyllabusStore = create<SyllabusState>()(
       },
 
       clearState: () => {
+        console.log('[SyllabusStore] clearState called - clearing all state including syllabusProgress');
+        console.log('[SyllabusStore] BEFORE clear - syllabusProgress:', get().syllabusProgress);
         set({
           syllabi: [],
           currentSyllabus: null,
+          syllabusProgress: {},  // 清除大纲进度！这是关键
           syllabusCoursesCache: {},
           loading: false,
           error: null,
         });
+        console.log('[SyllabusStore] AFTER clear - syllabusProgress:', get().syllabusProgress);
       },
     }),
     {
@@ -234,6 +273,19 @@ export const useSyllabusStore = create<SyllabusState>()(
       partialize: (state) => ({
         syllabusProgress: state.syllabusProgress,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          console.log('[SyllabusStore] Rehydrated from localStorage:', {
+            syllabusProgress: state.syllabusProgress,
+            completedCourses: Object.values(state.syllabusProgress || {}).map((p: SyllabusProgress) => ({
+              syllabusId: p.syllabusId,
+              completed: p.completedCourses?.length || 0,
+            })),
+          });
+        } else {
+          console.log('[SyllabusStore] No data in localStorage to rehydrate');
+        }
+      },
     }
   )
 );

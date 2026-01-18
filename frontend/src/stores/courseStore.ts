@@ -218,7 +218,10 @@ export const useCourseStore = create<CourseState>()(
       },
 
       clearCourseProgress: () => {
+        console.log('[CourseStore] clearCourseProgress called');
+        console.log('[CourseStore] BEFORE clear - courseProgress:', get().courseProgress);
         set({ courseProgress: {} });
+        console.log('[CourseStore] AFTER clear - courseProgress:', get().courseProgress);
       },
 
       isEmployee: () => {
@@ -259,6 +262,21 @@ export const useCourseStore = create<CourseState>()(
         courseProgress: state.courseProgress,
         surveyUserInfo: state.surveyUserInfo,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          console.log('[CourseStore] Rehydrated from localStorage:', {
+            courseProgress: state.courseProgress,
+            surveyUserInfo: state.surveyUserInfo ? {
+              user_id: state.surveyUserInfo.user_id,
+              name: state.surveyUserInfo.name,
+              user_type: state.surveyUserInfo.user_type,
+              hasToken: !!state.surveyUserInfo.token,
+            } : null,
+          });
+        } else {
+          console.log('[CourseStore] No data in localStorage to rehydrate');
+        }
+      },
     }
   )
 );
