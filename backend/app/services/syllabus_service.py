@@ -43,8 +43,15 @@ class SyllabusService:
         """获取用户所属的用户组ID列表"""
         data = self._load_user_groups()
         user_groups = []
+
+        # 提取员工ID数字部分（emp_5 -> 5）
+        check_ids = [user_id]
+        if user_id.startswith('emp_'):
+            check_ids.append(user_id[4:])  # 也检查不带前缀的ID
+
         for group in data.get('user_groups', []):
-            if user_id in group.get('member_ids', []):
+            member_ids = group.get('member_ids', [])
+            if any(uid in member_ids for uid in check_ids):
                 user_groups.append(group['id'])
         return user_groups
 
