@@ -10,7 +10,7 @@ export function LeaderboardView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const { username, totalXP } = useProgressStore();
+  const { totalXP } = useProgressStore();
   const { surveyUserInfo } = useCourseStore();
   const currentUserId = surveyUserInfo?.user_id;
   const currentUserLevel = Math.floor(totalXP / 100) + 1;

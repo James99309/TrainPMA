@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useCourseStore } from '../../stores/courseStore';
 import { useProgressStore } from '../../stores/progressStore';
 import type { Course } from '../../types';
@@ -95,15 +95,6 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
 
   const handleZoomOut = () => {
     setScale((s) => Math.max(s - 0.25, 0.5));
-  };
-
-  const handleSwipe = (info: PanInfo) => {
-    const threshold = 50;
-    if (info.offset.x > threshold && currentPage > 1) {
-      handlePrevPage();
-    } else if (info.offset.x < -threshold && currentPage < numPages) {
-      handleNextPage();
-    }
   };
 
   const progressPercent = numPages > 0 ? Math.round((currentPage / numPages) * 100) : 0;
