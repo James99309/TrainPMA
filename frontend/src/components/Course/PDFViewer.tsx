@@ -211,32 +211,21 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
           </div>
         )}
 
-        <motion.div
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.2}
-          onDragEnd={(_, info) => handleSwipe(info)}
-          style={{ touchAction: 'pan-y' }}
-          className="relative"
+        <Document
+          file={`${API_BASE_URL}${course.mediaUrl}`}
+          onLoadSuccess={onDocumentLoadSuccess}
+          onLoadError={onDocumentLoadError}
+          loading={null}
+          className="shadow-2xl rounded-lg overflow-hidden"
         >
-          <Document
-            file={`${API_BASE_URL}${course.mediaUrl}`}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={null}
-            className="shadow-2xl rounded-lg overflow-hidden pointer-events-none select-none"
-          >
-            <Page
-              pageNumber={currentPage}
-              width={containerWidth > 0 ? containerWidth * scale : undefined}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              className="bg-white"
-            />
-          </Document>
-          {/* Transparent overlay to capture swipe gestures */}
-          <div className="absolute inset-0" />
-        </motion.div>
+          <Page
+            pageNumber={currentPage}
+            width={containerWidth > 0 ? containerWidth * scale : undefined}
+            renderTextLayer={true}
+            renderAnnotationLayer={true}
+            className="bg-white"
+          />
+        </Document>
       </div>
 
       {/* Navigation Footer */}
