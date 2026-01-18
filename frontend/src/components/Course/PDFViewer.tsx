@@ -33,6 +33,8 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
   const [showControls, setShowControls] = useState(true);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const lastTouchDistance = useRef<number | null>(null);
 
   // Load saved progress
   useEffect(() => {
@@ -95,6 +97,38 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
 
   const handleZoomOut = () => {
     setScale((s) => Math.max(s - 0.25, 0.5));
+  };
+
+  // 双指缩放处理
+  const getTouchDistance = (touches: TouchList) => {
+    if (touches.length < 2) return null;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      lastTouchDistance.current = getTouchDistance(e.touches);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const currentDistance = getTouchDistance(e.touches);
+      if (currentDistance !== null) {
+        const delta = currentDistance - lastTouchDistance.current;
+        if (Math.abs(delta) > 10) {
+          const scaleFactor = delta > 0 ? 0.05 : -0.05;
+          setScale((s) => Math.min(Math.max(s + scaleFactor, 0.5), 3));
+          lastTouchDistance.current = currentDistance;
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastTouchDistance.current = null;
   };
 
   const progressPercent = numPages > 0 ? Math.round((currentPage / numPages) * 100) : 0;
@@ -202,21 +236,29 @@ export function PDFViewer({ course, onComplete, onBack }: PDFViewerProps) {
           </div>
         )}
 
-        <Document
-          file={`${API_BASE_URL}${course.mediaUrl}`}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={null}
-          className="shadow-2xl rounded-lg overflow-hidden"
+        <div
+          ref={pdfContainerRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="touch-none"
         >
-          <Page
-            pageNumber={currentPage}
-            width={containerWidth > 0 ? containerWidth * scale : undefined}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            className="bg-white"
-          />
-        </Document>
+          <Document
+            file={`${API_BASE_URL}${course.mediaUrl}`}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            loading={null}
+            className="shadow-2xl rounded-lg overflow-hidden"
+          >
+            <Page
+              pageNumber={currentPage}
+              width={containerWidth > 0 ? containerWidth * scale : undefined}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              className="bg-white"
+            />
+          </Document>
+        </div>
       </div>
 
       {/* Navigation Footer */}
