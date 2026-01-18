@@ -170,7 +170,10 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   // Check if form is valid
   const isFormValid = () => {
     if (loginMode === 'guest') {
-      return guestForm.name.trim() && guestForm.company.trim() && guestForm.phone.trim();
+      return guestForm.name.trim() &&
+             guestForm.company.trim() &&
+             guestForm.phone.trim() &&
+             invitationCodeValid !== null;  // 邀请码必须验证通过
     }
     return employeeForm.username.trim() && employeeForm.password;
   };
@@ -290,7 +293,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   {/* Invitation Code */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      邀请码
+                      邀请码 <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
