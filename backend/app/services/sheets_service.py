@@ -215,8 +215,9 @@ class SheetsService:
             correct_answer = q.get('correct_answer', 'A')
             if isinstance(correct_answer, list):
                 correct_answer = ','.join(correct_answer)
+            # 固定每题5分，不再从题目数据读取
             rows_to_add.append([question_id, survey_id, q.get('question_type'), q.get('question_text'),
-                               options_json, correct_answer, q.get('score', 5), q.get('explanation', ''), idx + 1])
+                               options_json, correct_answer, 5, q.get('explanation', ''), idx + 1])
         self.questions_sheet.append_rows(rows_to_add)
         self.clear_cache('questions')
         return len(rows_to_add)

@@ -1,5 +1,8 @@
 from app.services.sheets_service import sheets_service
 
+# 固定每题分数
+POINTS_PER_QUESTION = 5
+
 class QuizService:
     @staticmethod
     def check_answer(user_answer, correct_answer, question_type):
@@ -16,7 +19,7 @@ class QuizService:
         question = sheets_service.get_question_by_id(question_id, survey_id)
         if not question: raise ValueError('题目不存在')
         is_correct = QuizService.check_answer(user_answer, question.get('correct_answer'), question.get('question_type'))
-        score_earned = int(question.get('score', 5)) if is_correct else 0
+        score_earned = POINTS_PER_QUESTION if is_correct else 0
         response_id = sheets_service.save_response(user_id, question.get('survey_id'), question_id, user_answer, is_correct, score_earned, attempt, time_spent_seconds)
         return {'response_id': response_id, 'is_correct': is_correct, 'score_earned': score_earned,
                 'correct_answer': question.get('correct_answer') if not is_correct else None,
@@ -38,7 +41,7 @@ class QuizService:
         total_score = sum(int(r.get('score_earned', 0)) for r in responses)
         correct_count = sum(1 for r in responses if r.get('is_correct'))
         questions = sheets_service.get_questions_by_survey(survey_id)
-        max_score = sum(int(q.get('score', 5)) for q in questions)
+        max_score = len(questions) * POINTS_PER_QUESTION
         duration = sum(int(r.get('time_spent_seconds', 0)) for r in responses)
         score_id = sheets_service.save_score(user_id, survey_id, attempt_number, total_score, max_score, correct_count, len(responses)-correct_count, 0, duration)
         return {'score_id': score_id, 'total_score': total_score, 'max_score': max_score, 'correct_count': correct_count,
@@ -71,47 +74,34 @@ class QuizService:
         question_map = {q['question_id']: q for q in questions}
 
         total_score = 0
-        max_score = sum(int(q.get('score', 5)) for q in questions)
+        max_score = len(questions) * POINTS_PER_QUESTION
         results = []
-
-        print(f"\n=== DEBUG grade_quiz ===")
-        print(f"Received {len(answers)} answers")
 
         for answer in answers:
             question_id = answer.get('question_id')
             user_answer = answer.get('answer')
 
-            print(f"  Question ID: {question_id}")
-            print(f"  User Answer: {repr(user_answer)}")
-
             if question_id not in question_map:
-                print(f"  ⚠️ Question ID not found in map!")
                 continue
 
             question = question_map[question_id]
             correct_answer_raw = question.get('correct_answer')
             options = question.get('options', [])
             question_type = question.get('question_type', 'single_choice')
-            question_score = int(question.get('score', 5))
 
             # 将字母格式的正确答案转换为选项文本（与前端一致）
             correct_answer = QuizService._parse_correct_answer(correct_answer_raw, options)
 
-            print(f"  Correct Answer (raw): {repr(correct_answer_raw)}")
-            print(f"  Correct Answer (parsed): {repr(correct_answer)}")
-            print(f"  Options: {options}")
-
             # 检查答案
             is_correct = QuizService._check_answer_flexible(user_answer, correct_answer, question_type)
-            print(f"  Is Correct: {is_correct}")
 
             if is_correct:
-                total_score += question_score
+                total_score += POINTS_PER_QUESTION
 
             results.append({
                 'question_id': question_id,
                 'is_correct': is_correct,
-                'score': question_score if is_correct else 0,
+                'score': POINTS_PER_QUESTION if is_correct else 0,
                 'correct_answer': correct_answer
             })
 
@@ -120,10 +110,6 @@ class QuizService:
         # 获取及格分数
         survey = survey_service.get_survey_by_id(survey_id)
         pass_score = int(survey.get('pass_score', 60)) if survey else 60
-
-        print(f"Total Score: {total_score}/{max_score} = {percentage}%")
-        print(f"Passed: {percentage >= pass_score}")
-        print("=" * 50 + "\n")
 
         return {
             'total_score': total_score,

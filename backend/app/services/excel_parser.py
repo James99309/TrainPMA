@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 class ExcelParser:
     """解析 Excel 考卷格式"""
 
-    # 列定义（9列格式，与模板一致）
+    # 列定义（8列格式，与模板一致，已移除分值列）
     COLUMNS = {
         'type': 0,      # A: 题型 (single/multiple)
         'question': 1,  # B: 题目
@@ -16,8 +16,7 @@ class ExcelParser:
         'optionC': 4,   # E: 选项C
         'optionD': 5,   # F: 选项D
         'answer': 6,    # G: 正确答案
-        'score': 7,     # H: 分值
-        'explanation': 8  # I: 解析
+        'explanation': 7  # H: 解析
     }
 
     # 题型映射
@@ -70,12 +69,12 @@ class ExcelParser:
 
             workbook.close()
 
-            # 生成摘要
+            # 生成摘要（固定每题5分）
             summary = {
                 'total': len(questions),
                 'single_choice': len([q for q in questions if q['question_type'] == 'single_choice']),
                 'multiple_choice': len([q for q in questions if q['question_type'] == 'multiple_choice']),
-                'total_score': sum(q.get('score', 5) for q in questions)
+                'total_score': len(questions) * 5
             }
 
             return {
@@ -171,15 +170,8 @@ class ExcelParser:
             if correct_answer not in option_letters[:len(options)]:
                 raise ValueError(f"答案 '{correct_answer}' 不在选项范围内")
 
-        # 获取分值 (默认5分) - 答案列之后
-        score_col_idx = answer_col_idx + 1
-        try:
-            score = int(float(row[score_col_idx])) if score_col_idx < len(row) and row[score_col_idx] else 5
-        except (ValueError, TypeError):
-            score = 5
-
-        # 获取解析 (可选) - 分值列之后
-        explanation_col_idx = score_col_idx + 1
+        # 获取解析 (可选) - 答案列之后
+        explanation_col_idx = answer_col_idx + 1
         explanation = str(row[explanation_col_idx] or '').strip() if explanation_col_idx < len(row) else ''
 
         return {
@@ -187,7 +179,6 @@ class ExcelParser:
             'question_text': question_text,
             'options': options,
             'correct_answer': correct_answer,
-            'score': score,
             'explanation': explanation
         }
 
@@ -201,8 +192,8 @@ class ExcelParser:
         ws = wb.active
         ws.title = "考卷模板"
 
-        # 设置标题行
-        headers = ['题型', '题目', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
+        # 设置标题行（已移除分值列，固定每题5分）
+        headers = ['题型', '题目', '选项A', '选项B', '选项C', '选项D', '正确答案', '解析']
         header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
         header_font = Font(color='FFFFFF', bold=True)
 
@@ -214,9 +205,9 @@ class ExcelParser:
 
         # 添加示例数据
         examples = [
-            ['single', '以下哪个是 Python 的关键字？', 'class', 'Class', 'CLASS', 'CLAS', 'A', 5, 'class 是 Python 的保留关键字'],
-            ['multiple', '以下哪些是 Python 的数据类型？', 'int', 'str', 'func', 'bool', 'A,B,D', 10, 'int、str、bool 都是 Python 的内置数据类型'],
-            ['single', '1+1=?', '1', '2', '3', '4', 'B', 5, '基础数学'],
+            ['single', '以下哪个是 Python 的关键字？', 'class', 'Class', 'CLASS', 'CLAS', 'A', 'class 是 Python 的保留关键字'],
+            ['multiple', '以下哪些是 Python 的数据类型？', 'int', 'str', 'func', 'bool', 'A,B,D', 'int、str、bool 都是 Python 的内置数据类型'],
+            ['single', '1+1=?', '1', '2', '3', '4', 'B', '基础数学'],
         ]
 
         for row_idx, example in enumerate(examples, 2):
@@ -224,7 +215,7 @@ class ExcelParser:
                 ws.cell(row=row_idx, column=col_idx, value=value)
 
         # 调整列宽
-        column_widths = [10, 40, 20, 20, 20, 20, 12, 8, 30]
+        column_widths = [10, 40, 20, 20, 20, 20, 12, 30]
         for i, width in enumerate(column_widths, 1):
             ws.column_dimensions[chr(64 + i)].width = width
 
@@ -232,7 +223,7 @@ class ExcelParser:
         ws.cell(row=6, column=1, value="说明：")
         ws.cell(row=7, column=1, value="1. 题型：single=单选，multiple=多选")
         ws.cell(row=8, column=1, value="2. 多选答案用逗号分隔：A,B,D")
-        ws.cell(row=9, column=1, value="3. 分值默认为5分")
+        ws.cell(row=9, column=1, value="3. 每题固定5分")
         ws.cell(row=10, column=1, value="4. 解析为可选项")
 
         # 保存到内存

@@ -117,29 +117,16 @@ def get_questions(survey_id):
         else:
             questions = survey_service.get_shuffled_questions(survey_id)
 
-        # 🔧 DEBUG: 打印原始数据
-        print("\n=== DEBUG: Questions from Google Sheets ===")
-        for i, q in enumerate(questions[:3]):  # 只打印前3题
-            print(f"Q{i+1}: {q.get('question_text', '')[:30]}...")
-            print(f"    correct_answer (raw): {repr(q.get('correct_answer'))}")
-            print(f"    correct_answer type: {type(q.get('correct_answer'))}")
-            print(f"    options: {q.get('options')}")
-
+        # 固定每题5分
         safe_questions = [{
-            'id': q['question_id'],  # 前端期望 'id' 而不是 'question_id'
-            'question_id': q['question_id'],  # 保留兼容性
+            'id': q['question_id'],
+            'question_id': q['question_id'],
             'question_type': q['question_type'],
             'question_text': q['question_text'],
             'options': q.get('options', []),
-            'score': q.get('score', 5),
-            'correct_answer': parse_correct_answer(q.get('correct_answer'), q.get('options', []))  # 将字母转换为选项文本
+            'score': 5,
+            'correct_answer': parse_correct_answer(q.get('correct_answer'), q.get('options', []))
         } for q in questions]
-
-        # 🔧 DEBUG: 打印解析后的数据
-        print("\n=== DEBUG: After parsing ===")
-        for i, q in enumerate(safe_questions[:3]):
-            print(f"Q{i+1}: correct_answer (parsed): {repr(q['correct_answer'])}, type: {type(q['correct_answer'])}")
-        print("=" * 50 + "\n")
 
         return jsonify({'success': True, 'data': safe_questions}), 200
     except Exception as e: return jsonify({'success': False, 'message': str(e)}), 500

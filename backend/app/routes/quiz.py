@@ -63,8 +63,9 @@ def get_wrong_questions(survey_id):
     try:
         user_id = get_jwt_identity()
         questions = quiz_service.get_wrong_questions(user_id, survey_id)
-        safe = [{'question_id': q['question_id'], 'question_type': q['question_type'], 'question_text': q['question_text'], 
-                'options': q.get('options', []), 'score': q.get('score', 5)} for q in questions]
+        # 固定每题5分
+        safe = [{'question_id': q['question_id'], 'question_type': q['question_type'], 'question_text': q['question_text'],
+                'options': q.get('options', []), 'score': 5} for q in questions]
         return jsonify({'success': True, 'data': safe}), 200
     except Exception as e: return jsonify({'success': False, 'message': str(e)}), 500
 
