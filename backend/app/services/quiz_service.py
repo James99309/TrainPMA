@@ -74,7 +74,8 @@ class QuizService:
         question_map = {q['question_id']: q for q in questions}
 
         total_score = 0
-        max_score = len(questions) * POINTS_PER_QUESTION
+        # 使用用户实际回答的题目数量计算满分，而不是数据库中所有题目数量
+        max_score = len(answers) * POINTS_PER_QUESTION
         results = []
 
         for answer in answers:
