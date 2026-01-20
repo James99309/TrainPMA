@@ -45,6 +45,8 @@ class ProgressService:
         'wrong_questions',         # JSON array - 错题记录
         # 课程表 XP 统计
         'xp_by_syllabus',          # JSON object - {"syllabus-001": 150, "syllabus-002": 80}
+        # 首次登录奖励
+        'first_login_reward_claimed',  # bool - 是否已领取首次登录奖励
         'updated_at'
     ]
 
@@ -258,6 +260,8 @@ class ProgressService:
             'wrongQuestions': wrong_questions,
             # 课程表 XP 统计
             'xpBySyllabus': xp_by_syllabus,
+            # 首次登录奖励
+            'firstLoginRewardClaimed': str(row.get('first_login_reward_claimed', 'FALSE')).upper() == 'TRUE',
         }
 
     def _progress_to_row(self, progress: dict, progress_id: str, user_id: str, updated_at: str) -> list:
@@ -289,6 +293,8 @@ class ProgressService:
             json.dumps(progress.get('wrongQuestions', []), ensure_ascii=False),
             # 课程表 XP 统计
             json.dumps(progress.get('xpBySyllabus', {}), ensure_ascii=False),
+            # 首次登录奖励
+            'TRUE' if progress.get('firstLoginRewardClaimed', False) else 'FALSE',
             updated_at
         ]
 
@@ -319,6 +325,8 @@ class ProgressService:
             'wrongQuestions': [],
             # 课程表 XP 统计
             'xpBySyllabus': {},
+            # 首次登录奖励
+            'firstLoginRewardClaimed': False,
         }
 
 
