@@ -120,7 +120,9 @@ def save_progress():
             # 错题记录
             'wrongQuestions',
             # 课程表 XP 统计
-            'xpBySyllabus'
+            'xpBySyllabus',
+            # 首次登录奖励
+            'firstLoginRewardClaimed'
         ]
 
         progress = {}
