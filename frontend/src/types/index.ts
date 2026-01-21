@@ -376,6 +376,9 @@ export interface TimeConfig {
   end_date?: string | null;
 }
 
+// 课程表主题类型
+export type SyllabusTheme = 'default' | 'green' | 'red-chinese' | 'blue' | 'purple' | 'orange';
+
 // 课程表类型
 export interface Syllabus {
   id: string;
@@ -386,6 +389,7 @@ export interface Syllabus {
   access_type: 'public' | 'restricted';
   access_rules: AccessRules;
   time_config: TimeConfig;
+  theme?: SyllabusTheme;
   is_published: boolean;
   created_at: string;
   updated_at: string;

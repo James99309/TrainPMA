@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSyllabusStore } from '../../stores/syllabusStore';
 import type { Syllabus } from '../../types';
+import { syllabusThemes } from './syllabusThemes';
 
 interface SyllabusListProps {
   token: string;
@@ -110,6 +111,10 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
           // Calculate days remaining
           const daysRemaining = endDate ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
+          // Get theme configuration
+          const theme = syllabusThemes[syllabus.theme || 'default'];
+          const isThemedCard = syllabus.theme && syllabus.theme !== 'default';
+
           return (
             <motion.button
               key={syllabus.id}
@@ -119,7 +124,7 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
               onClick={() => isAvailable && onSelectSyllabus(syllabus)}
               disabled={!isAvailable}
               className={`
-                w-full bg-white dark:bg-gray-800 rounded-2xl p-4
+                w-full ${theme.background} rounded-2xl p-4
                 flex items-center gap-4 text-left
                 transition-all duration-200
                 ${isAvailable
@@ -138,7 +143,7 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                     stroke="currentColor"
                     strokeWidth="6"
                     fill="none"
-                    className="text-gray-100 dark:text-gray-700"
+                    className={theme.progressBg}
                   />
                   <motion.circle
                     cx="32"
@@ -149,7 +154,9 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                     fill="none"
                     strokeLinecap="round"
                     className={
-                      isCompleted
+                      isThemedCard
+                        ? 'text-white'
+                        : isCompleted
                         ? 'text-emerald-500'
                         : isInProgress
                         ? 'text-indigo-500'
@@ -163,23 +170,23 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                 {/* Center content */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {isCompleted ? (
-                    <svg className="w-7 h-7 text-emerald-500" viewBox="0 0 24 24" fill="currentColor">
+                    <svg className={`w-7 h-7 ${isThemedCard ? 'text-white' : 'text-emerald-500'}`} viewBox="0 0 24 24" fill="currentColor">
                       <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
                     </svg>
                   ) : isInProgress ? (
-                    <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                    <span className={`text-lg font-bold ${isThemedCard ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`}>
                       {percentage}%
                     </span>
                   ) : isNotYetStarted ? (
-                    <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-6 h-6 ${isThemedCard ? 'text-white/80' : 'text-amber-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   ) : isExpired ? (
-                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-6 h-6 ${isThemedCard ? 'text-white/60' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   ) : (
-                    <svg className="w-6 h-6 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
+                    <svg className={`w-6 h-6 ${isThemedCard ? 'text-white' : 'text-indigo-500'}`} viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                     </svg>
                   )}
@@ -189,27 +196,27 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                  <h3 className={`font-semibold text-lg leading-tight ${theme.textColor}`}>
                     {syllabus.name}
                   </h3>
                   {/* Status badge */}
                   {isCompleted && (
-                    <span className="flex-shrink-0 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full">
+                    <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${isThemedCard ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'}`}>
                       Done
                     </span>
                   )}
                   {isInProgress && (
-                    <span className="flex-shrink-0 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-medium rounded-full">
+                    <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${isThemedCard ? 'bg-white/20 text-white' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'}`}>
                       Active
                     </span>
                   )}
                   {isNotYetStarted && (
-                    <span className="flex-shrink-0 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-xs font-medium rounded-full">
+                    <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${isThemedCard ? 'bg-white/20 text-white' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'}`}>
                       Soon
                     </span>
                   )}
                   {isExpired && (
-                    <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-medium rounded-full">
+                    <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${isThemedCard ? 'bg-white/20 text-white/80' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                       Ended
                     </span>
                   )}
@@ -217,7 +224,7 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
 
                 {/* Description */}
                 {syllabus.description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
+                  <p className={`text-sm mt-1 line-clamp-1 ${theme.subTextColor}`}>
                     {syllabus.description}
                   </p>
                 )}
@@ -230,29 +237,29 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                       {[...Array(Math.min(totalCount, 3))].map((_, i) => (
                         <div
                           key={i}
-                          className={`w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${
+                          className={`w-4 h-4 rounded-full border-2 ${isThemedCard ? 'border-white/20' : 'border-white dark:border-gray-800'} ${
                             i < completedCount
-                              ? 'bg-emerald-400'
-                              : 'bg-gray-200 dark:bg-gray-600'
+                              ? isThemedCard ? 'bg-white' : 'bg-emerald-400'
+                              : isThemedCard ? 'bg-white/30' : 'bg-gray-200 dark:bg-gray-600'
                           }`}
                         />
                       ))}
                       {totalCount > 3 && (
-                        <div className="w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 border-2 border-white dark:border-gray-800 flex items-center justify-center">
-                          <span className="text-[8px] font-bold text-gray-500 dark:text-gray-400">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isThemedCard ? 'bg-white/30 border-white/20' : 'bg-gray-100 dark:bg-gray-700 border-white dark:border-gray-800'}`}>
+                          <span className={`text-[8px] font-bold ${isThemedCard ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}>
                             +{totalCount - 3}
                           </span>
                         </div>
                       )}
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className={`text-xs ${theme.subTextColor}`}>
                       {completedCount}/{totalCount}
                     </span>
                   </div>
 
                   {/* Time info */}
                   {isTimeLimited && isAvailable && daysRemaining !== null && daysRemaining > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                    <div className={`flex items-center gap-1 text-xs ${theme.subTextColor}`}>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -261,7 +268,7 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                   )}
 
                   {isNotYetStarted && startDate && (
-                    <div className="flex items-center gap-1 text-xs text-amber-500">
+                    <div className={`flex items-center gap-1 text-xs ${isThemedCard ? 'text-white/80' : 'text-amber-500'}`}>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
@@ -276,7 +283,9 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
                 <div className="flex-shrink-0">
                   <svg
                     className={`w-5 h-5 ${
-                      isCompleted
+                      isThemedCard
+                        ? 'text-white'
+                        : isCompleted
                         ? 'text-emerald-400'
                         : isInProgress
                         ? 'text-indigo-400'

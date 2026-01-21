@@ -131,7 +131,12 @@ class AuthService:
         employee_data = pma_result['data']
 
         # 生成本系统 Token，使用 emp_ 前缀区分员工
-        user_id = f"emp_{employee_data['employee_id']}"
+        # 方案1：SP8D 保持 emp_X 格式（向后兼容），OVS 使用 emp_ovs_X 格式
+        source = employee_data.get('source', 'sp8d')
+        if source == 'ovs':
+            user_id = f"emp_ovs_{employee_data['employee_id']}"
+        else:
+            user_id = f"emp_{employee_data['employee_id']}"
         token = generate_token(user_id, user_type='employee')
 
         # 获取用户进度

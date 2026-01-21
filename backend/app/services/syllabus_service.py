@@ -111,6 +111,7 @@ class SyllabusService:
                 'start_date': None,
                 'end_date': None
             },
+            'theme': 'default',
             'is_published': False,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
@@ -143,7 +144,7 @@ class SyllabusService:
                 allowed_fields = [
                     'name', 'description', 'cover_image_url',
                     'course_sequence', 'access_type', 'access_rules',
-                    'time_config', 'is_published'
+                    'time_config', 'theme', 'is_published'
                 ]
                 for field in allowed_fields:
                     if field in updates:

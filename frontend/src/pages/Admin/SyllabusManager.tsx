@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import adminApi from '../../services/adminApi';
-import type { Syllabus, Course, UserGroup } from '../../types';
+import type { Syllabus, Course, UserGroup, SyllabusTheme } from '../../types';
 import { InvitationCodeManager } from '../../components/Syllabus';
+import { themeLabels } from '../../components/Syllabus/syllabusThemes';
 
 export function SyllabusManager() {
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
@@ -21,6 +22,7 @@ export function SyllabusManager() {
     name: '',
     description: '',
     cover_image_url: '',
+    theme: 'default' as SyllabusTheme,
   });
 
   // Course editor state
@@ -86,7 +88,7 @@ export function SyllabusManager() {
       await loadData();
       setShowForm(false);
       setEditingSyllabus(null);
-      setFormData({ name: '', description: '', cover_image_url: '' });
+      setFormData({ name: '', description: '', cover_image_url: '', theme: 'default' });
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to save syllabus');
@@ -114,6 +116,7 @@ export function SyllabusManager() {
       name: syllabus.name,
       description: syllabus.description || '',
       cover_image_url: syllabus.cover_image_url || '',
+      theme: syllabus.theme || 'default',
     });
     setShowForm(true);
   };
@@ -254,7 +257,7 @@ export function SyllabusManager() {
         <button
           onClick={() => {
             setEditingSyllabus(null);
-            setFormData({ name: '', description: '', cover_image_url: '' });
+            setFormData({ name: '', description: '', cover_image_url: '', theme: 'default' });
             setShowForm(true);
           }}
           className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
@@ -331,6 +334,23 @@ export function SyllabusManager() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
                     placeholder="https://..."
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    卡片主题
+                  </label>
+                  <select
+                    value={formData.theme}
+                    onChange={(e) => setFormData({ ...formData, theme: e.target.value as SyllabusTheme })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    {(Object.keys(themeLabels) as SyllabusTheme[]).map((themeKey) => (
+                      <option key={themeKey} value={themeKey}>
+                        {themeLabels[themeKey]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex justify-end gap-3 mt-6">

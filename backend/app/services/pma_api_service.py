@@ -189,9 +189,13 @@ def get_employees_from_source(source: str, limit: int = 500, offset: int = 0, se
                 employees = []
                 for emp in raw_employees:
                     emp_copy = emp.copy()
-                    # 添加 emp_ 前缀，保持与员工登录后的 user_id 格式一致
+                    # 添加前缀，保持与员工登录后的 user_id 格式一致
+                    # SP8D 保持 emp_X 格式（向后兼容），OVS 使用 emp_ovs_X 格式
                     if 'user_id' in emp_copy:
-                        emp_copy['user_id'] = f"emp_{emp_copy['user_id']}"
+                        if source == 'ovs':
+                            emp_copy['user_id'] = f"emp_ovs_{emp_copy['user_id']}"
+                        else:
+                            emp_copy['user_id'] = f"emp_{emp_copy['user_id']}"
                     # 标记数据来源
                     emp_copy['source'] = source
                     employees.append(emp_copy)
