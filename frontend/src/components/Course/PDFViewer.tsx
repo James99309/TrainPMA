@@ -9,8 +9,8 @@ import type { Course } from '../../types';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 
-// Set worker source for PDF.js
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Set worker source for PDF.js (使用 jsdelivr CDN，国内访问更稳定)
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // API Base URL for PDF files
 const API_BASE_URL = import.meta.env.VITE_QUIZ_API_URL || '';
