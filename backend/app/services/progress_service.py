@@ -632,6 +632,103 @@ class ProgressService:
                 'current_user': {'rank': None, 'totalXP': 0, 'level': 1}
             }
 
+    def recalculate_all_total_xp(self) -> dict:
+        """
+        重新计算所有用户的 totalXP
+        totalXP = sum(xpBySyllabus.values())
+
+        Returns:
+            {
+                'success': True,
+                'total_users': int,
+                'updated_users': int,
+                'details': [{'user_id': str, 'old_xp': int, 'new_xp': int}, ...]
+            }
+        """
+        try:
+            all_values = self.progress_sheet.get_all_values()
+            if not all_values or len(all_values) <= 1:
+                return {
+                    'success': True,
+                    'total_users': 0,
+                    'updated_users': 0,
+                    'details': []
+                }
+
+            headers = all_values[0]
+            details = []
+            updated_count = 0
+
+            # 获取列索引
+            user_id_col = headers.index('user_id') if 'user_id' in headers else 1
+            total_xp_col = headers.index('total_xp') if 'total_xp' in headers else 3
+            xp_by_syllabus_col = headers.index('xp_by_syllabus') if 'xp_by_syllabus' in headers else None
+
+            if xp_by_syllabus_col is None:
+                return {
+                    'success': False,
+                    'message': 'xp_by_syllabus 列不存在',
+                    'total_users': 0,
+                    'updated_users': 0,
+                    'details': []
+                }
+
+            # 遍历所有用户
+            for row_idx, row in enumerate(all_values[1:], start=2):  # row_idx 从 2 开始 (Excel 行号)
+                if len(row) <= user_id_col:
+                    continue
+
+                user_id = row[user_id_col]
+                if not user_id:
+                    continue
+
+                # 获取旧的 totalXP
+                old_xp = int(row[total_xp_col]) if len(row) > total_xp_col and row[total_xp_col] else 0
+
+                # 获取 xpBySyllabus
+                xp_by_syllabus_str = row[xp_by_syllabus_col] if len(row) > xp_by_syllabus_col else '{}'
+                try:
+                    xp_by_syllabus = json.loads(xp_by_syllabus_str or '{}')
+                except:
+                    xp_by_syllabus = {}
+
+                # 计算新的 totalXP = sum(xpBySyllabus.values())
+                new_xp = sum(xp_by_syllabus.values()) if xp_by_syllabus else 0
+
+                # 记录详情
+                details.append({
+                    'user_id': user_id,
+                    'old_xp': old_xp,
+                    'new_xp': new_xp,
+                    'diff': new_xp - old_xp
+                })
+
+                # 如果 XP 有变化，更新该行的 total_xp 字段
+                if old_xp != new_xp:
+                    cell = f'{chr(65 + total_xp_col)}{row_idx}'
+                    self.progress_sheet.update(cell, [[new_xp]])
+                    updated_count += 1
+                    print(f"✅ 更新用户 {user_id}: {old_xp} -> {new_xp}")
+
+            return {
+                'success': True,
+                'total_users': len(all_values) - 1,
+                'updated_users': updated_count,
+                'details': details
+            }
+
+        except Exception as e:
+            print(f"❌ 重新计算 totalXP 失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'message': str(e),
+                'total_users': 0,
+                'updated_users': 0,
+                'details': []
+            }
+
 
 # 单例实例
 progress_service = ProgressService()

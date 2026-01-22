@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, send_file
 from app.services import admin_service
 from app.services.course_service import course_service
 from app.services.excel_parser import excel_parser
+from app.services.progress_service import progress_service
 from app.utils import api_key_required
 from io import BytesIO
 
@@ -360,3 +361,22 @@ def download_quiz_template():
         )
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ==================== 数据迁移 ====================
+
+@admin_bp.route('/migrate/recalculate-xp', methods=['POST'])
+@api_key_required
+def recalculate_total_xp():
+    """
+    重新计算所有用户的 totalXP = sum(xpBySyllabus.values())
+    清除非课程表来源的 XP（首次登录奖励、每日登录奖励等）
+    """
+    try:
+        result = progress_service.recalculate_all_total_xp()
+        return jsonify(result), 200 if result.get('success') else 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
