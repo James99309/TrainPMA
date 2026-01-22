@@ -330,35 +330,32 @@ export function SurveyQuiz({
 
       // Award XP and update achievements
       // XP 计算: 每题 10 XP（例如 10 题 = 100 XP）
-      let xpEarned = questions.length * 10;
+      // 注意：每个测验只能获得一次 XP，防止重复刷分
+      const baseXP = questions.length * 10;
+      let xpEarned = 0;
 
       if (passed) {
         // 检查是否首次通过此测验
         const isFirstPass = recordFirstQuizPass(surveyId);
 
-        // 计算额外奖励
-        let bonusXP = 0;
-
+        // 只有首次通过才能获得 XP
         if (isFirstPass) {
-          bonusXP += FIRST_PASS_XP;
-        }
-        if (isPerfect) {
-          bonusXP += PERFECT_SCORE_XP;
-        }
+          xpEarned = baseXP;
 
-        // 发放基础XP
-        addXP(xpEarned);
-        // 同时记录到课程表XP (如果有课程表ID)
-        if (syllabusId) {
-          addSyllabusXP(syllabusId, xpEarned);
-        }
+          // 发放基础XP
+          addXP(xpEarned);
+          // 同时记录到课程表XP (如果有课程表ID)
+          if (syllabusId) {
+            addSyllabusXP(syllabusId, xpEarned);
+          }
 
-        // 发放奖励XP并显示toast
-        if (isFirstPass) {
+          // 首次通过奖励
           addXP(FIRST_PASS_XP);
           if (syllabusId) {
             addSyllabusXP(syllabusId, FIRST_PASS_XP);
           }
+          xpEarned += FIRST_PASS_XP;
+
           // 延迟显示避免与结果页面冲突
           setTimeout(() => {
             showXPToast({
@@ -367,24 +364,26 @@ export function SurveyQuiz({
               icon: '🎯',
             });
           }, 500);
-        }
 
-        if (isPerfect) {
-          addXP(PERFECT_SCORE_XP);
-          if (syllabusId) {
-            addSyllabusXP(syllabusId, PERFECT_SCORE_XP);
+          // 满分奖励（只在首次通过时判断）
+          if (isPerfect) {
+            addXP(PERFECT_SCORE_XP);
+            if (syllabusId) {
+              addSyllabusXP(syllabusId, PERFECT_SCORE_XP);
+            }
+            xpEarned += PERFECT_SCORE_XP;
+
+            // 满分奖励延迟更长时间显示
+            setTimeout(() => {
+              showXPToast({
+                amount: PERFECT_SCORE_XP,
+                reason: '测验满分',
+                icon: '💯',
+              });
+            }, 3300);
           }
-          // 满分奖励延迟更长时间显示
-          setTimeout(() => {
-            showXPToast({
-              amount: PERFECT_SCORE_XP,
-              reason: '测验满分',
-              icon: '💯',
-            });
-          }, isFirstPass ? 3300 : 500);
         }
-
-        xpEarned += bonusXP;
+        // 如果不是首次通过，不发放任何 XP
         updateStreak();  // 记录学习活动，更新连续天数
         recordQuizPass(isPerfect);  // 记录测验通过，解锁相关成就
       } else {
