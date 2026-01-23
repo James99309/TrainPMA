@@ -147,6 +147,17 @@ class CertificateService:
             if not course_quizzes:
                 return {'success': False, 'message': '课程表中没有测验'}
 
+            # 批量预加载分数和问题数据（减少 API 调用次数）
+            from app.services.sheets_service import sheets_service
+            print("📊 预加载分数和问题数据...")
+            all_scores = sheets_service.scores_sheet.get_all_records()
+            survey_ids = list(set(q['survey_id'] for q in course_quizzes))
+            all_questions = {
+                sid: sheets_service.get_questions_by_survey(sid)
+                for sid in survey_ids
+            }
+            print(f"✅ 预加载完成: {len(all_scores)} 条分数记录, {len(survey_ids)} 个测验问题")
+
             # 过滤通过所有测验的用户
             participants = []
             not_passed_count = 0
@@ -160,8 +171,8 @@ class CertificateService:
                         user_id, course_quizzes, user_progress=p
                     )
                     if passed_all:
-                        # 计算实际测验分数
-                        user_quiz_scores = self._calculate_user_quiz_total(user_id, course_quizzes)
+                        # 计算实际测验分数（使用预加载数据）
+                        user_quiz_scores = self._calculate_user_quiz_total(user_id, course_quizzes, all_scores)
                         participants.append({
                             'user_id': user_id,
                             'score': user_quiz_scores['total_score'],      # 实际得分
@@ -205,9 +216,12 @@ class CertificateService:
                 user_name = user_map.get(user_id, '未知用户')
                 user_company = self._get_user_company(user_id)
 
-                # 获取用户在各课程的得分
+                # 获取用户在各课程的得分（使用预加载数据）
                 user_progress = participant.get('user_progress', {})
-                course_scores = self._get_user_course_scores(user_id, syllabus, course_details, user_progress)
+                course_scores = self._get_user_course_scores(
+                    user_id, syllabus, course_details, user_progress,
+                    all_scores, all_questions
+                )
 
                 # 计算百分比
                 percentage = 0
@@ -419,26 +433,35 @@ class CertificateService:
         passed_all = len(failed_courses) == 0
         return passed_all, failed_courses
 
-    def _calculate_user_quiz_total(self, user_id: str, course_quizzes: list) -> dict:
-        """计算用户在所有测验的总分"""
-        from app.services.sheets_service import sheets_service
+    def _get_best_score_from_cache(self, user_id: str, survey_id: str, all_scores: list) -> dict | None:
+        """从预加载的分数数据中获取用户最佳成绩"""
+        user_scores = [
+            s for s in all_scores
+            if s.get('user_id') == user_id and s.get('survey_id') == survey_id
+        ]
+        if not user_scores:
+            return None
+        return max(user_scores, key=lambda x: x.get('total_score', 0))
 
+    def _calculate_user_quiz_total(self, user_id: str, course_quizzes: list, all_scores: list) -> dict:
+        """计算用户在所有测验的总分（使用预加载数据）"""
         total_score = 0
         max_score = 0
 
         for quiz_info in course_quizzes:
             survey_id = quiz_info['survey_id']
-            best = sheets_service.get_user_best_score(user_id, survey_id)
+            best = self._get_best_score_from_cache(user_id, survey_id, all_scores)
             if best:
-                total_score += best['total_score']
-                max_score += best['max_score']
+                total_score += best.get('total_score', 0)
+                max_score += best.get('max_score', 0)
 
         return {'total_score': total_score, 'max_score': max_score}
 
-    def _get_user_course_scores(self, user_id: str, syllabus: dict, course_details: dict, user_progress: dict = None) -> dict:
-        """获取用户在课程表各课程的实际测验分数、百分比和 XP"""
-        from app.services.sheets_service import sheets_service
-
+    def _get_user_course_scores(
+        self, user_id: str, syllabus: dict, course_details: dict,
+        user_progress: dict = None, all_scores: list = None, all_questions: dict = None
+    ) -> dict:
+        """获取用户在课程表各课程的实际测验分数、百分比和 XP（使用预加载数据）"""
         course_scores = {}
         course_sequence = syllabus.get('course_sequence', [])
 
@@ -487,19 +510,19 @@ class CertificateService:
                 xp += 50  # 阅读完成 +50 XP
 
             if survey_id:
-                # 从 Scores 表获取实际测验分数
-                best_score = sheets_service.get_user_best_score(user_id, survey_id)
+                # 从预加载数据获取实际测验分数
+                best_score = self._get_best_score_from_cache(user_id, survey_id, all_scores)
                 if best_score:
-                    score_data['score'] = best_score['total_score']
-                    score_data['max_score'] = best_score['max_score']
-                    if best_score['max_score'] > 0:
+                    score_data['score'] = best_score.get('total_score', 0)
+                    score_data['max_score'] = best_score.get('max_score', 0)
+                    if score_data['max_score'] > 0:
                         score_data['percentage'] = round(
-                            best_score['total_score'] / best_score['max_score'] * 100
+                            score_data['score'] / score_data['max_score'] * 100
                         )
 
                 # 通过测验的 XP
                 if survey_id in passed_quizzes:
-                    questions = sheets_service.get_questions_by_survey(survey_id)
+                    questions = all_questions.get(survey_id, []) if all_questions else []
                     xp += len(questions) * 10
 
             score_data['xp_earned'] = xp
