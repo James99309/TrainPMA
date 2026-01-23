@@ -729,6 +729,102 @@ class ProgressService:
                 'details': []
             }
 
+    def rebuild_scores_from_progress(self) -> dict:
+        """从 Progress.firstPassedQuizzes 重建缺失的 Scores 记录
+
+        对于已通过但没有 Scores 记录的测验，假设满分写入
+        注意：每次测验固定抽10题，每题5分，满分50分
+        """
+        import time
+        from app.services.sheets_service import sheets_service
+
+        # 固定参数：每次测验10题，每题5分
+        QUESTIONS_PER_QUIZ = 10
+        POINTS_PER_QUESTION = 5
+
+        # 获取所有用户进度
+        all_progress = self._get_all_user_progress()
+
+        # 获取所有已有的 Scores 记录
+        all_scores = sheets_service.get_all_scores()
+        existing_scores = {
+            (s.get('user_id'), s.get('survey_id'))
+            for s in all_scores
+        }
+
+        rebuilt = []
+        skipped = []
+        write_count = 0
+
+        for progress in all_progress:
+            user_id = progress.get('user_id')
+            if not user_id:
+                continue
+
+            # 获取 firstPassedQuizzes
+            first_passed = progress.get('firstPassedQuizzes', [])
+            if isinstance(first_passed, str):
+                try:
+                    first_passed = json.loads(first_passed)
+                except:
+                    first_passed = []
+
+            if not first_passed:
+                continue
+
+            for survey_id in first_passed:
+                # 检查是否已有 Scores 记录
+                if (user_id, survey_id) in existing_scores:
+                    skipped.append({'user_id': user_id, 'survey_id': survey_id, 'reason': '已有记录'})
+                    continue
+
+                # 验证测验存在
+                questions = sheets_service.get_questions_by_survey(survey_id)
+                if not questions:
+                    skipped.append({'user_id': user_id, 'survey_id': survey_id, 'reason': '测验不存在'})
+                    continue
+
+                # 固定分数计算：每次测验10题，满分50分
+                max_score = QUESTIONS_PER_QUIZ * POINTS_PER_QUESTION  # 50
+                total_score = max_score  # 假设满分
+                correct_count = QUESTIONS_PER_QUIZ  # 10题全对
+                wrong_count = 0
+
+                # 速率限制: 每 30 次写入后暂停 60 秒
+                if write_count > 0 and write_count % 30 == 0:
+                    print(f"⏳ 速率限制: 已写入 {write_count} 条，暂停 60 秒...")
+                    time.sleep(60)
+
+                # 保存到 Scores 表
+                sheets_service.save_score(
+                    user_id=user_id,
+                    survey_id=survey_id,
+                    attempt_number=1,
+                    total_score=total_score,
+                    max_score=max_score,
+                    correct_count=correct_count,
+                    wrong_count=wrong_count,
+                    retry_count=0,
+                    duration_seconds=0
+                )
+                write_count += 1
+
+                rebuilt.append({
+                    'user_id': user_id,
+                    'survey_id': survey_id,
+                    'total_score': total_score,
+                    'max_score': max_score
+                })
+
+        return {
+            'users_processed': len(all_progress),
+            'existing_scores': len(existing_scores),
+            'rebuilt_count': len(rebuilt),
+            'skipped_count': len(skipped),
+            'rebuilt': rebuilt,
+            'skipped': skipped
+        }
+
 
 # 单例实例
 progress_service = ProgressService()

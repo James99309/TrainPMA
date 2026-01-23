@@ -46,6 +46,16 @@ export function SyllabusManager() {
   // Invitation editor state
   const [showInvitationEditor, setShowInvitationEditor] = useState(false);
 
+  // Certificate issuing state
+  const [issuingCertificates, setIssuingCertificates] = useState<string | null>(null);
+  const [certificateResult, setCertificateResult] = useState<{
+    syllabusName: string;
+    issued: number;
+    total: number;
+    skipped: number;
+    notPassed: number;
+  } | null>(null);
+
   // Load data
   const loadData = async () => {
     try {
@@ -201,6 +211,29 @@ export function SyllabusManager() {
   const openInvitationEditor = (syllabus: Syllabus) => {
     setSelectedSyllabus(syllabus);
     setShowInvitationEditor(true);
+  };
+
+  // Issue certificates for syllabus
+  const handleIssueCertificates = async (syllabus: Syllabus) => {
+    if (!confirm(`确定要为 "${syllabus.name}" 通过所有测验的参与者颁发证书吗？\n\n• 必须通过所有课程测验（≥60%）\n• 已有证书的用户将被跳过`)) {
+      return;
+    }
+
+    setIssuingCertificates(syllabus.id);
+    try {
+      const result = await adminApi.issueCertificates(syllabus.id);
+      setCertificateResult({
+        syllabusName: syllabus.name,
+        issued: result.certificates_issued,
+        total: result.total_participants,
+        skipped: result.skipped,
+        notPassed: result.not_passed,
+      });
+    } catch (err: any) {
+      setError(err.message || '颁发证书失败');
+    } finally {
+      setIssuingCertificates(null);
+    }
   };
 
   // Save access settings
@@ -703,6 +736,83 @@ export function SyllabusManager() {
         )}
       </AnimatePresence>
 
+      {/* Certificate Result Modal */}
+      <AnimatePresence>
+        {certificateResult && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setCertificateResult(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">🏆</span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  证书颁发完成
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  {certificateResult.syllabusName}
+                </p>
+
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-4">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {certificateResult.issued}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        新颁发
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {certificateResult.total}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        合格人数
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">
+                        {certificateResult.skipped}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        已有证书
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                        {certificateResult.notPassed}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        未通过
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setCertificateResult(null)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  确定
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Syllabi List */}
       {syllabi.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-xl">
@@ -773,6 +883,13 @@ export function SyllabusManager() {
                   className="px-3 py-1 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                 >
                   邀请码
+                </button>
+                <button
+                  onClick={() => handleIssueCertificates(syllabus)}
+                  disabled={issuingCertificates === syllabus.id}
+                  className="px-3 py-1 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {issuingCertificates === syllabus.id ? '颁发中...' : '颁发证书'}
                 </button>
                 <button
                   onClick={() => handleEdit(syllabus)}

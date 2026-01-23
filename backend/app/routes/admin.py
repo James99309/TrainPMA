@@ -380,3 +380,261 @@ def recalculate_total_xp():
             'success': False,
             'message': str(e)
         }), 500
+
+
+@admin_bp.route('/migrate/rebuild-scores-from-progress', methods=['POST'])
+@api_key_required
+def rebuild_scores_from_progress():
+    """从 Progress.firstPassedQuizzes 重建缺失的 Scores 记录"""
+    try:
+        result = progress_service.rebuild_scores_from_progress()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@admin_bp.route('/migrate/fix-rebuilt-scores', methods=['POST'])
+@api_key_required
+def fix_rebuilt_scores():
+    """
+    修复之前迁移创建的错误 Scores 记录
+
+    之前的迁移逻辑错误：max_score = len(questions) * 5 (题库总数 * 5)
+    正确应为：max_score = 10 * 5 = 50 (每个测验固定抽10题)
+
+    识别方式：attempt_number=1 且 duration_seconds=0 的记录是迁移创建的
+    """
+    try:
+        from app.services.sheets_service import sheets_service
+
+        # 固定参数：每次测验10题，每题5分
+        QUESTIONS_PER_QUIZ = 10
+        POINTS_PER_QUESTION = 5
+        CORRECT_MAX_SCORE = QUESTIONS_PER_QUIZ * POINTS_PER_QUESTION  # 50
+
+        # 直接获取 scores sheet 的原始数据和表头
+        scores_sheet = sheets_service.scores_sheet
+        all_rows = scores_sheet.get_all_values()
+
+        if not all_rows:
+            return jsonify({'success': True, 'fixed_count': 0, 'message': '无数据'}), 200
+
+        headers = all_rows[0]
+        col_indices = {h: i for i, h in enumerate(headers)}
+
+        # 获取必要的列索引
+        attempt_col = col_indices.get('attempt_number')
+        duration_col = col_indices.get('duration_seconds')
+        max_score_col = col_indices.get('max_score')
+        total_score_col = col_indices.get('total_score')
+        correct_col = col_indices.get('correct_count')
+        wrong_col = col_indices.get('wrong_count')
+        user_id_col = col_indices.get('user_id')
+        survey_id_col = col_indices.get('survey_id')
+
+        fixed_records = []
+        skipped_records = []
+
+        # 遍历所有行（跳过表头）
+        for row_idx, row in enumerate(all_rows[1:], start=2):  # row_idx 是 Excel 行号
+            if len(row) <= max(attempt_col or 0, duration_col or 0, max_score_col or 0):
+                continue
+
+            user_id = row[user_id_col] if user_id_col is not None and len(row) > user_id_col else ''
+            survey_id = row[survey_id_col] if survey_id_col is not None and len(row) > survey_id_col else ''
+            attempt_number = int(row[attempt_col] or 0) if attempt_col is not None else 0
+            duration_seconds = int(row[duration_col] or 0) if duration_col is not None else 0
+            current_max = int(row[max_score_col] or 0) if max_score_col is not None else 0
+
+            # 识别迁移创建的记录：attempt_number=1 且 duration_seconds=0
+            if attempt_number == 1 and duration_seconds == 0:
+                # 检查是否需要修复（max_score 不等于 50）
+                if current_max != CORRECT_MAX_SCORE:
+                    try:
+                        # 直接按行更新单元格
+                        updates = []
+                        if total_score_col is not None:
+                            updates.append({'row': row_idx, 'col': total_score_col + 1, 'value': CORRECT_MAX_SCORE})
+                        if max_score_col is not None:
+                            updates.append({'row': row_idx, 'col': max_score_col + 1, 'value': CORRECT_MAX_SCORE})
+                        if correct_col is not None:
+                            updates.append({'row': row_idx, 'col': correct_col + 1, 'value': QUESTIONS_PER_QUIZ})
+                        if wrong_col is not None:
+                            updates.append({'row': row_idx, 'col': wrong_col + 1, 'value': 0})
+
+                        for update in updates:
+                            scores_sheet.update_cell(update['row'], update['col'], update['value'])
+
+                        fixed_records.append({
+                            'user_id': user_id,
+                            'survey_id': survey_id,
+                            'old_max': current_max,
+                            'new_max': CORRECT_MAX_SCORE,
+                            'row': row_idx
+                        })
+                    except Exception as e:
+                        skipped_records.append({
+                            'user_id': user_id,
+                            'survey_id': survey_id,
+                            'reason': f'更新失败: {str(e)}',
+                            'row': row_idx
+                        })
+                else:
+                    skipped_records.append({
+                        'user_id': user_id,
+                        'survey_id': survey_id,
+                        'reason': 'max_score 已正确'
+                    })
+
+        # 清除缓存
+        sheets_service.clear_cache('leaderboard')
+
+        return jsonify({
+            'success': True,
+            'fixed_count': len(fixed_records),
+            'skipped_count': len(skipped_records),
+            'fixed_records': fixed_records,
+            'skipped_records': skipped_records
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@admin_bp.route('/migrate/create-badges-from-progress', methods=['POST'])
+@api_key_required
+def create_badges_from_progress():
+    """
+    从 Progress.firstPassedQuizzes 为已通过测验的用户创建课程徽章
+
+    遍历所有用户的 firstPassedQuizzes，为每个通过的测验创建徽章记录
+    如果徽章已存在则跳过
+    """
+    try:
+        from app.services.badge_service import get_badge_service
+        from app.services.sheets_service import sheets_service
+        import json
+
+        badge_svc = get_badge_service()
+
+        # 获取所有用户进度
+        all_progress = progress_service._get_all_user_progress()
+        print(f"📊 共找到 {len(all_progress)} 个用户进度记录")
+
+        created_badges = []
+        skipped_badges = []
+        failed_badges = []
+
+        for user_progress in all_progress:
+            user_id = user_progress.get('user_id')
+            if not user_id:
+                continue
+
+            # 获取用户首次通过的测验列表
+            first_passed = user_progress.get('firstPassedQuizzes', [])
+            if isinstance(first_passed, str):
+                try:
+                    first_passed = json.loads(first_passed)
+                except:
+                    first_passed = []
+
+            if not first_passed:
+                continue
+
+            print(f"👤 处理用户 {user_id}，共 {len(first_passed)} 个已通过测验")
+
+            for survey_id in first_passed:
+                try:
+                    # 查找该测验对应的课程
+                    course_info = badge_svc.get_course_by_survey_id(survey_id)
+                    if not course_info:
+                        skipped_badges.append({
+                            'user_id': user_id,
+                            'survey_id': survey_id,
+                            'reason': '未找到对应课程'
+                        })
+                        continue
+
+                    # 检查是否已有徽章
+                    existing = badge_svc._get_badge_by_user_course(
+                        user_id, course_info['course_id']
+                    )
+                    if existing:
+                        skipped_badges.append({
+                            'user_id': user_id,
+                            'survey_id': survey_id,
+                            'course_id': course_info['course_id'],
+                            'reason': '徽章已存在'
+                        })
+                        continue
+
+                    # 从 Scores 表获取最佳分数
+                    best_score = sheets_service.get_user_best_score(user_id, survey_id)
+                    if best_score:
+                        score = best_score['total_score']
+                        max_score = best_score['max_score']
+                        percentage = round(score / max_score * 100) if max_score > 0 else 0
+                    else:
+                        # 如果没有分数记录，使用默认值（通过即满分）
+                        score = 50
+                        max_score = 50
+                        percentage = 100
+
+                    # 创建徽章
+                    result = badge_svc.issue_or_update_badge(
+                        user_id=user_id,
+                        course_id=course_info['course_id'],
+                        course_title=course_info['course_title'],
+                        survey_id=survey_id,
+                        score=score,
+                        max_score=max_score,
+                        percentage=percentage
+                    )
+
+                    if result.get('success'):
+                        created_badges.append({
+                            'user_id': user_id,
+                            'course_id': course_info['course_id'],
+                            'course_title': course_info['course_title'],
+                            'score': score,
+                            'max_score': max_score
+                        })
+                    else:
+                        failed_badges.append({
+                            'user_id': user_id,
+                            'survey_id': survey_id,
+                            'reason': result.get('message', '创建失败')
+                        })
+
+                except Exception as e:
+                    failed_badges.append({
+                        'user_id': user_id,
+                        'survey_id': survey_id,
+                        'reason': str(e)
+                    })
+
+        return jsonify({
+            'success': True,
+            'created_count': len(created_badges),
+            'skipped_count': len(skipped_badges),
+            'failed_count': len(failed_badges),
+            'created_badges': created_badges,
+            'skipped_badges': skipped_badges,
+            'failed_badges': failed_badges
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500

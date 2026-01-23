@@ -721,6 +721,39 @@ export const adminApi = {
     );
     return result.data || [];
   },
+
+  // ==================== Certificate Management ====================
+
+  // Issue certificates for a syllabus
+  async issueCertificates(
+    syllabusId: string,
+    issuedBy?: string
+  ): Promise<{
+    certificates_issued: number;
+    total_participants: number;
+    skipped: number;
+    not_passed: number;
+  }> {
+    const result = await adminRequest<{
+      success: boolean;
+      certificates_issued: number;
+      total_participants: number;
+      skipped: number;
+      not_passed: number;
+    }>(`/api/admin/certificates/issue/${syllabusId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ issued_by: issuedBy || 'admin' }),
+    });
+    return {
+      certificates_issued: result.certificates_issued,
+      total_participants: result.total_participants,
+      skipped: result.skipped,
+      not_passed: result.not_passed || 0,
+    };
+  },
 };
 
 export default adminApi;

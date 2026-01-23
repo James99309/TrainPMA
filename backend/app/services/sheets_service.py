@@ -317,7 +317,55 @@ class SheetsService:
                                      correct_count, wrong_count, retry_count, 0, now, duration_seconds])
         self.clear_cache('leaderboard')
         return score_id
-    
+
+    def update_score(self, user_id: str, survey_id: str, updates: dict) -> bool:
+        """更新指定用户和测验的成绩记录
+
+        Args:
+            user_id: 用户ID
+            survey_id: 测验ID
+            updates: 要更新的字段 {total_score, max_score, correct_count, wrong_count}
+
+        Returns:
+            是否更新成功
+        """
+        try:
+            rows = self.scores_sheet.get_all_values()
+            headers = rows[0] if rows else []
+
+            # 找到列索引
+            col_indices = {h: i for i, h in enumerate(headers)}
+
+            for idx, row in enumerate(rows):
+                if idx == 0:  # 跳过表头
+                    continue
+                # user_id 在第2列(index 1), survey_id 在第3列(index 2)
+                if len(row) > 2 and row[1] == user_id and row[2] == survey_id:
+                    # 更新指定字段
+                    if 'total_score' in updates and 'total_score' in col_indices:
+                        col = col_indices['total_score']
+                        self.scores_sheet.update_cell(idx + 1, col + 1, updates['total_score'])
+
+                    if 'max_score' in updates and 'max_score' in col_indices:
+                        col = col_indices['max_score']
+                        self.scores_sheet.update_cell(idx + 1, col + 1, updates['max_score'])
+
+                    if 'correct_count' in updates and 'correct_count' in col_indices:
+                        col = col_indices['correct_count']
+                        self.scores_sheet.update_cell(idx + 1, col + 1, updates['correct_count'])
+
+                    if 'wrong_count' in updates and 'wrong_count' in col_indices:
+                        col = col_indices['wrong_count']
+                        self.scores_sheet.update_cell(idx + 1, col + 1, updates['wrong_count'])
+
+                    self.clear_cache('leaderboard')
+                    return True
+
+            return False
+        except Exception as e:
+            print(f"❌ 更新成绩失败: {str(e)}")
+            return False
+
     def get_leaderboard(self, survey_id, limit=100):
         cached = self._get_cache('leaderboard', survey_id)
         if cached: return cached
@@ -352,6 +400,51 @@ class SheetsService:
         except IndexError:
             return 0
         return len([r for r in rows if r.get('user_id') == user_id and r.get('survey_id') == survey_id])
+
+    def get_user_best_score(self, user_id: str, survey_id: str) -> dict | None:
+        """获取用户在某测验的最佳成绩
+
+        Returns:
+            {
+                'total_score': int,
+                'max_score': int,
+                'correct_count': int,
+                'wrong_count': int,
+                'completed_at': str
+            }
+            或 None（如果没有记录）
+        """
+        try:
+            rows = self.scores_sheet.get_all_records()
+        except IndexError:
+            return None
+
+        user_scores = [r for r in rows
+                       if r.get('user_id') == user_id and r.get('survey_id') == survey_id]
+
+        if not user_scores:
+            return None
+
+        # 找最高分（同分则取最早完成的）
+        best = max(user_scores, key=lambda x: (
+            int(x.get('total_score', 0)),
+            -len(x.get('completed_at', ''))  # 越早越好
+        ))
+
+        return {
+            'total_score': int(best.get('total_score', 0)),
+            'max_score': int(best.get('max_score', 0)),
+            'correct_count': int(best.get('correct_count', 0)),
+            'wrong_count': int(best.get('wrong_count', 0)),
+            'completed_at': best.get('completed_at', '')
+        }
+
+    def get_all_scores(self) -> list:
+        """获取所有成绩记录"""
+        try:
+            return self.scores_sheet.get_all_records()
+        except IndexError:
+            return []
 
     # User Search Methods
     def search_users(self, query, limit=20):

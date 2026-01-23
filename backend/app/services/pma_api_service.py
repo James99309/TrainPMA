@@ -239,3 +239,27 @@ def get_all_employees(limit: int = 500, offset: int = 0, search: str = '') -> Li
 
     logger.info(f"从所有数据源共获取到 {len(all_employees)} 名员工")
     return all_employees
+
+
+def get_employee_by_id(employee_id: str) -> Dict[str, Any] | None:
+    """
+    根据员工ID获取员工信息
+
+    Args:
+        employee_id: 员工ID（不含 emp_ 前缀）
+
+    Returns:
+        员工信息字典，包含 name, company 等字段，不存在则返回 None
+    """
+    # 获取所有员工并查找匹配的
+    # 注意：这里 employee_id 不含前缀，需要匹配 emp_{id} 或 emp_ovs_{id}
+    all_employees = get_all_employees()
+
+    for emp in all_employees:
+        user_id = emp.get('user_id', '')
+        # 检查是否匹配 emp_{id} 或 emp_ovs_{id}
+        if user_id == f"emp_{employee_id}" or user_id == f"emp_ovs_{employee_id}":
+            return emp
+
+    logger.warning(f"未找到员工 ID: {employee_id}")
+    return None

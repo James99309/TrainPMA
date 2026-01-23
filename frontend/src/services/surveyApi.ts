@@ -1,4 +1,5 @@
 import type { Survey, SurveyQuestion, LeaderboardEntry } from '../types';
+import { getAuthToken } from './progressApi';
 
 // Quiz backend API URL
 // In production (Docker), API requests go through nginx proxy to '/api'
@@ -57,7 +58,7 @@ export const surveyApi = {
   // Get questions for a survey
   async getQuestions(surveyId: string): Promise<SurveyQuestion[]> {
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = getAuthToken();
       const result = await apiRequest<{ success: boolean; data: SurveyQuestion[] }>(
         `/api/surveys/${surveyId}/questions`,
         {
@@ -96,6 +97,7 @@ export const surveyApi = {
     }>;
   }> {
     try {
+      const token = getAuthToken();
       const result = await apiRequest<{
         success: boolean;
         total_score: number;
@@ -110,6 +112,7 @@ export const surveyApi = {
         }>;
       }>('/api/quiz/submit', {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: JSON.stringify(submission),
       });
       return result;

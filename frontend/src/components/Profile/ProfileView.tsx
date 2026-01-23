@@ -1,6 +1,11 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useProgressStore } from '../../stores/progressStore';
 import { useWrongQuestionStore } from '../../stores/wrongQuestionStore';
+import { CertificateList, CertificateView, CertificateBadgeInline } from '../Certificate';
+import { getUserCertificates } from '../../services/certificateApi';
+import { getUserBadges } from '../../services/badgeApi';
+import type { Certificate, Badge } from '../../types';
 
 const ACHIEVEMENTS = [
   // 课程完成类
@@ -46,6 +51,50 @@ export function ProfileView() {
 
   const { getUnresolvedCount, getTotalCount } = useWrongQuestionStore();
 
+  // Certificate state
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [certificateView, setCertificateView] = useState<'none' | 'list' | 'detail'>('none');
+  const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null);
+  const [loadingCertificates, setLoadingCertificates] = useState(true);
+
+  // Badge state
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [loadingBadges, setLoadingBadges] = useState(true);
+
+  // Fetch certificates
+  useEffect(() => {
+    const fetchCertificates = async () => {
+      setLoadingCertificates(true);
+      try {
+        const data = await getUserCertificates();
+        setCertificates(data);
+      } catch (error) {
+        console.error('Failed to fetch certificates:', error);
+      } finally {
+        setLoadingCertificates(false);
+      }
+    };
+
+    fetchCertificates();
+  }, []);
+
+  // Fetch badges
+  useEffect(() => {
+    const fetchBadges = async () => {
+      setLoadingBadges(true);
+      try {
+        const data = await getUserBadges();
+        setBadges(data);
+      } catch (error) {
+        console.error('Failed to fetch badges:', error);
+      } finally {
+        setLoadingBadges(false);
+      }
+    };
+
+    fetchBadges();
+  }, []);
+
   const displayName = username || '学员';
 
   const canExchangeHeart = totalXP >= 100 && hearts < maxHearts;
@@ -64,6 +113,44 @@ export function ProfileView() {
       resetProgress();
     }
   };
+
+  // Certificate handlers
+  const handleOpenCertificateList = () => {
+    setCertificateView('list');
+  };
+
+  const handleSelectCertificate = (cert: Certificate) => {
+    setSelectedCertificate(cert);
+    setCertificateView('detail');
+  };
+
+  const handleBackFromCertificateList = () => {
+    setCertificateView('none');
+  };
+
+  const handleBackFromCertificateDetail = () => {
+    setCertificateView('list');
+    setSelectedCertificate(null);
+  };
+
+  // Render certificate views
+  if (certificateView === 'list') {
+    return (
+      <CertificateList
+        onSelectCertificate={handleSelectCertificate}
+        onBack={handleBackFromCertificateList}
+      />
+    );
+  }
+
+  if (certificateView === 'detail' && selectedCertificate) {
+    return (
+      <CertificateView
+        certificate={selectedCertificate}
+        onBack={handleBackFromCertificateDetail}
+      />
+    );
+  }
 
   return (
     <div className="pt-20 pb-24 px-4 min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -184,6 +271,110 @@ export function ProfileView() {
           </div>
         </motion.div>
 
+        {/* Badges section - 课程徽章 */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            {'\ud83c\udfc5'} 课程徽章
+          </h2>
+
+          {loadingBadges ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="w-5 h-5 border-2 border-[#58CC02] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : badges.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                暂无徽章，通过课程测验后可获得
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {badges.map((badge) => (
+                <motion.div
+                  key={badge.badge_id}
+                  className="p-3 rounded-xl bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-700"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="text-2xl">{'\ud83c\udfc5'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                        {badge.course_title}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {badge.score}/{badge.max_score} ({badge.percentage}%)
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        {badge.attempt_count > 1 ? `第 ${badge.attempt_count} 次通过` : '首次通过'}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Certificates section */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              {'\ud83c\udfc6'} 我的证书
+            </h2>
+            {certificates.length > 0 && (
+              <button
+                onClick={handleOpenCertificateList}
+                className="text-sm text-[#58CC02] font-medium"
+              >
+                查看全部 {'\u2192'}
+              </button>
+            )}
+          </div>
+
+          {loadingCertificates ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="w-5 h-5 border-2 border-[#58CC02] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : certificates.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                暂无证书，完成培训后可获得
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Show up to 3 certificates as badges */}
+              <div className="flex flex-wrap gap-2">
+                {certificates.slice(0, 3).map((cert) => (
+                  <CertificateBadgeInline
+                    key={cert.certificate_id}
+                    certificate={cert}
+                    onClick={() => handleSelectCertificate(cert)}
+                  />
+                ))}
+              </div>
+              {certificates.length > 3 && (
+                <button
+                  onClick={handleOpenCertificateList}
+                  className="w-full py-2 text-center text-sm text-gray-500 dark:text-gray-400 hover:text-[#58CC02]"
+                >
+                  还有 {certificates.length - 3} 个证书...
+                </button>
+              )}
+            </div>
+          )}
+        </motion.div>
+
         {/* Daily goal */}
         <motion.div
           className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm mb-6"
@@ -191,7 +382,7 @@ export function ProfileView() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">🎯 每日目标</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{'\ud83c\udfaf'} 每日目标</h2>
           <div className="flex gap-2">
             {[5, 10, 15, 20].map((minutes) => (
               <button

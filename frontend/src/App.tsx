@@ -26,7 +26,9 @@ import { recordProgress } from './services/sheetApi';
 import authApi from './services/authApi';
 import { cancelPendingSync, forceImmediateSync, setAuthToken, clearAuthToken } from './services/progressApi';
 import bookData from './data/stargirl.json';
-import type { Course, CourseExtended, UserInfo, WrongQuestion, Syllabus } from './types';
+import type { Course, CourseExtended, UserInfo, WrongQuestion, Syllabus, Certificate } from './types';
+import { CertificateView } from './components/Certificate';
+import { getCertificateById } from './services/certificateApi';
 import './index.css';
 
 interface Chapter {
@@ -72,9 +74,69 @@ function App() {
   // Check if we're on the admin page
   const isAdminPage = window.location.pathname === '/admin' || window.location.pathname === '/admin/';
 
+  // Check if we're viewing a public certificate
+  const certificateMatch = window.location.pathname.match(/^\/certificate\/([^/]+)$/);
+  const [publicCertificate, setPublicCertificate] = useState<Certificate | null>(null);
+  const [loadingPublicCert, setLoadingPublicCert] = useState(!!certificateMatch);
+
+  // Load public certificate if URL matches
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/certificate\/([^/]+)$/);
+    if (match) {
+      const certId = match[1];
+      setLoadingPublicCert(true);
+      getCertificateById(certId)
+        .then((cert) => {
+          setPublicCertificate(cert);
+        })
+        .finally(() => {
+          setLoadingPublicCert(false);
+        });
+    }
+  }, []);
+
   // Return admin page if on admin route
   if (isAdminPage) {
     return <AdminPage />;
+  }
+
+  // Return public certificate view
+  if (certificateMatch) {
+    if (loadingPublicCert) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-[#58CC02] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-500">加载证书中...</p>
+          </div>
+        </div>
+      );
+    }
+    if (!publicCertificate) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-6xl mb-4">📜</div>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">证书不存在</h1>
+            <p className="text-gray-500 mb-4">该证书可能已被删除或链接无效</p>
+            <a
+              href="/"
+              className="text-[#58CC02] font-medium hover:underline"
+            >
+              返回首页
+            </a>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <CertificateView
+        certificate={publicCertificate}
+        onBack={() => {
+          window.location.href = '/';
+        }}
+      />
+    );
   }
 
   // Restore auth data on app mount ONLY (not on every surveyUserInfo change)

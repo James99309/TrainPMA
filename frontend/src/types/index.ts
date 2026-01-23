@@ -424,6 +424,39 @@ export interface SyllabusProgress {
   lastAccessedAt?: string;
 }
 
+// 证书类型
+export interface Certificate {
+  certificate_id: string;
+  user_id: string;
+  user_name: string;
+  user_company: string;
+  syllabus_id: string;
+  syllabus_name: string;
+  score: number;
+  max_score: number;
+  rank: number;
+  total_participants: number;
+  course_scores: Record<string, { name: string; score: number }>;
+  issued_at: string;
+  issued_by: string;
+}
+
+// 课程徽章类型
+export interface Badge {
+  badge_id: string;
+  user_id: string;
+  user_name: string;
+  course_id: string;
+  course_title: string;
+  survey_id: string;
+  score: number;
+  max_score: number;
+  percentage: number;
+  attempt_count: number;
+  first_passed_at: string;
+  last_updated_at: string;
+}
+
 // 扩展 Course 类型以支持标签和前置课程
 export interface CourseExtended extends Course {
   prerequisites?: string[];

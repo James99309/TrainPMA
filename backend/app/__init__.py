@@ -52,7 +52,7 @@ def create_app(config_name='development'):
     
     # 注册蓝图
     from app.routes import auth, survey, quiz, leaderboard, admin, course, progress
-    from app.routes import syllabus, user_group
+    from app.routes import syllabus, user_group, certificate, badge
 
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(survey.survey_bp)
@@ -63,6 +63,8 @@ def create_app(config_name='development'):
     app.register_blueprint(progress.progress_bp)
     app.register_blueprint(syllabus.syllabus_bp)
     app.register_blueprint(user_group.user_group_bp)
+    app.register_blueprint(certificate.certificate_bp)
+    app.register_blueprint(badge.badge_bp)
     
     # 健康检查路由
     @app.route('/health', methods=['GET'])
