@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSyllabusStore } from '../../stores/syllabusStore';
+import { useProgressStore } from '../../stores/progressStore';
 import type { Syllabus } from '../../types';
 import { syllabusThemes } from './syllabusThemes';
 
@@ -10,7 +11,8 @@ interface SyllabusListProps {
 }
 
 export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
-  const { syllabi, loading, error, loadAccessibleSyllabi, getSyllabusProgress, getSyllabusCompletionPercentage, loadSyllabusCourses } = useSyllabusStore();
+  const { syllabi, loading, error, loadAccessibleSyllabi, getSyllabusProgress, getSyllabusCompletionPercentage, loadSyllabusCourses, syncFromGlobalProgress, syllabusCoursesCache } = useSyllabusStore();
+  const { coursesCompleted } = useProgressStore();
 
   useEffect(() => {
     loadAccessibleSyllabi(token);
@@ -22,6 +24,16 @@ export function SyllabusList({ token, onSelectSyllabus }: SyllabusListProps) {
       loadSyllabusCourses(syllabus.id, token);
     });
   }, [syllabi, token, loadSyllabusCourses]);
+
+  // Sync progress from global coursesCompleted (backend) to syllabus progress (localStorage)
+  useEffect(() => {
+    syllabi.forEach((syllabus) => {
+      const courseIds = syllabusCoursesCache[syllabus.id]?.map(c => c.id) || [];
+      if (courseIds.length > 0 && coursesCompleted.length > 0) {
+        syncFromGlobalProgress(coursesCompleted, syllabus.id, courseIds);
+      }
+    });
+  }, [syllabi, coursesCompleted, syllabusCoursesCache, syncFromGlobalProgress]);
 
   if (loading) {
     return (

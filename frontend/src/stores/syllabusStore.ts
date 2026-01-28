@@ -25,6 +25,7 @@ interface SyllabusState {
   markCourseCompletedInSyllabus: (syllabusId: string, courseId: string) => void;
   markCourseStartedInSyllabus: (syllabusId: string, courseId: string) => void;
   isCourseStartedInSyllabus: (syllabusId: string, courseId: string) => boolean;
+  syncFromGlobalProgress: (coursesCompleted: string[], syllabusId: string, courseIds: string[]) => void;
 
   // Computed
   isCourseUnlockedInSyllabus: (syllabusId: string, courseId: string) => boolean;
@@ -189,6 +190,42 @@ export const useSyllabusStore = create<SyllabusState>()(
         const progress = get().syllabusProgress[syllabusId];
         const startedCourses = progress?.startedCourses || [];
         return startedCourses.includes(courseId);
+      },
+
+      syncFromGlobalProgress: (coursesCompleted, syllabusId, courseIds) => {
+        set((state) => {
+          const currentProgress = state.syllabusProgress[syllabusId] || {
+            syllabusId,
+            completedCourses: [],
+            startedCourses: [],
+          };
+
+          // Find completed courses in this syllabus (those that exist in global coursesCompleted)
+          const completedInThisSyllabus = courseIds.filter(id => coursesCompleted.includes(id));
+
+          // Merge existing and newly discovered completed courses
+          const mergedCompleted = [...new Set([
+            ...currentProgress.completedCourses,
+            ...completedInThisSyllabus
+          ])];
+
+          // Only update if there are changes
+          if (mergedCompleted.length === currentProgress.completedCourses.length &&
+              mergedCompleted.every(id => currentProgress.completedCourses.includes(id))) {
+            return state;
+          }
+
+          return {
+            syllabusProgress: {
+              ...state.syllabusProgress,
+              [syllabusId]: {
+                ...currentProgress,
+                completedCourses: mergedCompleted,
+                lastAccessedAt: new Date().toISOString(),
+              },
+            },
+          };
+        });
       },
 
       isCourseUnlockedInSyllabus: (syllabusId, courseId) => {
