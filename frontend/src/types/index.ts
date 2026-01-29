@@ -408,6 +408,7 @@ export interface UserGroup {
 // 用户简要信息类型 (用于搜索结果)
 export interface UserBasicInfo {
   user_id: string;
+  legacy_user_id?: string;
   name: string;
   company?: string;
   phone?: string;

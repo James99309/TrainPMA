@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import adminApi from '../../services/adminApi';
 import type { UserGroup, UserBasicInfo } from '../../types';
@@ -132,7 +132,9 @@ export function UserGroupManager() {
     const filteredUsers = getFilteredUsers();
     const newSelected = new Set(selectedUserIds);
     filteredUsers.forEach((user) => {
-      if (!selectedGroup?.member_ids.includes(user.user_id)) {
+      const isMember = selectedGroup?.member_ids.includes(user.user_id) ||
+        (!!user.legacy_user_id && selectedGroup?.member_ids.includes(user.legacy_user_id));
+      if (!isMember) {
         newSelected.add(user.user_id);
       }
     });
@@ -143,6 +145,16 @@ export function UserGroupManager() {
   const clearSelection = () => {
     setSelectedUserIds(new Set());
   };
+
+  // Build a lookup map keyed by both user_id and legacy_user_id
+  const userMap = useMemo(() => {
+    const map = new Map<string, UserBasicInfo>();
+    allUsers.forEach((u) => {
+      map.set(u.user_id, u);
+      if (u.legacy_user_id) map.set(u.legacy_user_id, u);
+    });
+    return map;
+  }, [allUsers]);
 
   // Get filtered users based on filterText
   const getFilteredUsers = () => {
@@ -338,8 +350,8 @@ export function UserGroupManager() {
                   ) : (
                     <div className="space-y-2 overflow-y-auto flex-1">
                       {selectedGroup.member_ids.map((userId) => {
-                        // Find user info from allUsers
-                        const userInfo = allUsers.find((u) => u.user_id === userId);
+                        // Find user info using userMap (supports both new and legacy IDs)
+                        const userInfo = userMap.get(userId);
                         return (
                           <div
                             key={userId}
@@ -408,7 +420,8 @@ export function UserGroupManager() {
                   ) : (
                     <div className="space-y-1 overflow-y-auto flex-1">
                       {getFilteredUsers().map((user) => {
-                        const isMember = selectedGroup.member_ids.includes(user.user_id);
+                        const isMember = selectedGroup.member_ids.includes(user.user_id) ||
+                          (!!user.legacy_user_id && selectedGroup.member_ids.includes(user.legacy_user_id));
                         const isSelected = selectedUserIds.has(user.user_id);
 
                         return (

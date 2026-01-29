@@ -192,12 +192,18 @@ def get_employees_from_source(source: str, limit: int = 500, offset: int = 0, se
                     # 添加前缀，保持与员工登录后的 user_id 格式一致
                     # 优先使用 id 字段（与登录流程 user_data.get('id') 一致），回退到 user_id
                     # SP8D 保持 emp_X 格式（向后兼容），OVS 使用 emp_ovs_X 格式
-                    raw_id = emp_copy.get('id') or emp_copy.get('user_id')
+                    # 同时保存旧格式 legacy_user_id，用于匹配旧数据中的 member_ids
+                    original_api_user_id = emp_copy.get('user_id')
+                    raw_id = emp_copy.get('id') or original_api_user_id
                     if raw_id is not None:
                         if source == 'ovs':
                             emp_copy['user_id'] = f"emp_ovs_{raw_id}"
+                            if original_api_user_id and str(original_api_user_id) != str(raw_id):
+                                emp_copy['legacy_user_id'] = f"emp_ovs_{original_api_user_id}"
                         else:
                             emp_copy['user_id'] = f"emp_{raw_id}"
+                            if original_api_user_id and str(original_api_user_id) != str(raw_id):
+                                emp_copy['legacy_user_id'] = f"emp_{original_api_user_id}"
                     else:
                         logger.warning(f"员工记录缺少 id 和 user_id 字段: {emp}")
                     # 标记数据来源
