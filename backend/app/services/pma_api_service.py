@@ -190,12 +190,16 @@ def get_employees_from_source(source: str, limit: int = 500, offset: int = 0, se
                 for emp in raw_employees:
                     emp_copy = emp.copy()
                     # 添加前缀，保持与员工登录后的 user_id 格式一致
+                    # 优先使用 id 字段（与登录流程 user_data.get('id') 一致），回退到 user_id
                     # SP8D 保持 emp_X 格式（向后兼容），OVS 使用 emp_ovs_X 格式
-                    if 'user_id' in emp_copy:
+                    raw_id = emp_copy.get('id') or emp_copy.get('user_id')
+                    if raw_id is not None:
                         if source == 'ovs':
-                            emp_copy['user_id'] = f"emp_ovs_{emp_copy['user_id']}"
+                            emp_copy['user_id'] = f"emp_ovs_{raw_id}"
                         else:
-                            emp_copy['user_id'] = f"emp_{emp_copy['user_id']}"
+                            emp_copy['user_id'] = f"emp_{raw_id}"
+                    else:
+                        logger.warning(f"员工记录缺少 id 和 user_id 字段: {emp}")
                     # 标记数据来源
                     emp_copy['source'] = source
                     employees.append(emp_copy)
