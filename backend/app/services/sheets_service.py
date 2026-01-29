@@ -42,13 +42,24 @@ class SheetsService:
             self.questions_sheet = self.spreadsheet.worksheet('Questions')
             self.responses_sheet = self.spreadsheet.worksheet('Responses')
             self.scores_sheet = self.spreadsheet.worksheet('Scores')
-            
+            try:
+                self.user_groups_sheet = self.spreadsheet.worksheet('UserGroups')
+            except gspread.exceptions.WorksheetNotFound:
+                self.user_groups_sheet = self.spreadsheet.add_worksheet(
+                    title='UserGroups', rows=100, cols=6)
+                self.user_groups_sheet.append_row(
+                    ['group_id', 'name', 'description', 'member_ids', 'created_at', 'updated_at'])
+                print("📋 已自动创建 UserGroups worksheet")
+
             # 缓存
-            self._cache = {'surveys': {}, 'questions': {}, 'users': {}, 'leaderboard': {}}
-            self._cache_ttl = {'surveys': 300, 'questions': 600, 'users': 300, 'leaderboard': 60}
-            
+            self._cache = {'surveys': {}, 'questions': {}, 'users': {}, 'leaderboard': {}, 'user_groups': {}}
+            self._cache_ttl = {'surveys': 300, 'questions': 600, 'users': 300, 'leaderboard': 60, 'user_groups': 300}
+
             self._initialized = True
             print("✅ Google Sheets 连接成功")
+
+            # 自动迁移：如果 UserGroups 为空且 user_groups.json 存在，自动导入
+            self._auto_migrate_user_groups()
         except Exception as e:
             print(f"❌ Google Sheets 连接失败: {str(e)}")
             raise
@@ -69,8 +80,74 @@ class SheetsService:
         if category:
             self._cache[category] = {}
         else:
-            self._cache = {'surveys': {}, 'questions': {}, 'users': {}, 'leaderboard': {}}
-    
+            self._cache = {'surveys': {}, 'questions': {}, 'users': {}, 'leaderboard': {}, 'user_groups': {}}
+
+    def _auto_migrate_user_groups(self):
+        """启动时自动迁移：如果 Sheets 中 UserGroups 为空且 user_groups.json 存在，则自动导入并修正旧 ID"""
+        try:
+            existing = self.user_groups_sheet.get_all_values()
+            if len(existing) > 1:
+                return  # 已有数据，跳过
+
+            data_dir = os.getenv('DATA_DIR', os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'))
+            json_path = os.path.join(data_dir, 'user_groups.json')
+
+            if not os.path.exists(json_path):
+                return  # JSON 文件不存在，跳过
+
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            groups = data.get('user_groups', [])
+            if not groups:
+                return
+
+            # 尝试获取原始员工数据构建 ID 映射
+            id_mapping = {}
+            try:
+                from app.services.pma_api_service import get_raw_employees
+                raw_employees = get_raw_employees()
+                for emp in raw_employees:
+                    raw_user_id = emp.get('user_id')
+                    raw_id = emp.get('id')
+                    source = emp.get('source', 'sp8d')
+                    if raw_user_id is not None and raw_id is not None and str(raw_user_id) != str(raw_id):
+                        if source == 'ovs':
+                            id_mapping[f"emp_ovs_{raw_user_id}"] = f"emp_ovs_{raw_id}"
+                        else:
+                            id_mapping[f"emp_{raw_user_id}"] = f"emp_{raw_id}"
+            except Exception as e:
+                print(f"⚠️ 获取员工映射失败，将直接迁移不修正 ID: {e}")
+
+            rows_to_add = []
+            fix_count = 0
+            for group in groups:
+                old_member_ids = group.get('member_ids', [])
+                new_member_ids = []
+                for mid in old_member_ids:
+                    if mid in id_mapping:
+                        new_member_ids.append(id_mapping[mid])
+                        fix_count += 1
+                    else:
+                        new_member_ids.append(mid)
+
+                rows_to_add.append([
+                    group.get('id', ''),
+                    group.get('name', ''),
+                    group.get('description', ''),
+                    json.dumps(new_member_ids, ensure_ascii=False),
+                    group.get('created_at', ''),
+                    group.get('updated_at', ''),
+                ])
+
+            if rows_to_add:
+                self.user_groups_sheet.append_rows(rows_to_add)
+
+            print(f"📋 已自动迁移 {len(rows_to_add)} 个用户组到 Sheets，修正了 {fix_count} 个旧 ID")
+        except Exception as e:
+            print(f"⚠️ 用户组自动迁移失败（不影响启动）: {e}")
+
     # Users
     def create_user(self, name, company, phone):
         user_id = str(uuid.uuid4())

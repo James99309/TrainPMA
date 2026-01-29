@@ -245,6 +245,49 @@ def get_all_employees(limit: int = 500, offset: int = 0, search: str = '') -> Li
     return all_employees
 
 
+def get_raw_employees_from_source(source: str, limit: int = 500) -> List[Dict[str, Any]]:
+    """
+    从指定数据源获取原始员工列表（不做 ID 转换）
+
+    返回的每条记录保留原始 id 和 user_id 字段，用于迁移时构建映射。
+    """
+    config = DATASOURCES.get(source)
+    if not config or not config['url'] or not config['api_key']:
+        return []
+
+    try:
+        response = requests.get(
+            f"{config['url']}/api/external/employees",
+            params={'limit': limit},
+            headers={'X-External-API-Key': config['api_key']},
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                employees = data.get('data', [])
+                for emp in employees:
+                    emp['source'] = source
+                return employees
+        return []
+    except Exception as e:
+        logger.error(f"获取 {source} 原始员工列表失败: {str(e)}")
+        return []
+
+
+def get_raw_employees(limit: int = 500) -> List[Dict[str, Any]]:
+    """
+    获取所有数据源的原始员工列表（不做 ID 转换）
+
+    用于迁移：构建 emp_{user_id} → emp_{id} 的映射。
+    """
+    all_employees = []
+    for source_key in DATASOURCES:
+        all_employees.extend(get_raw_employees_from_source(source_key, limit))
+    return all_employees
+
+
 def get_employee_by_id(employee_id: str) -> Dict[str, Any] | None:
     """
     根据员工ID获取员工信息

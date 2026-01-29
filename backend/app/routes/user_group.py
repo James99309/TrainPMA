@@ -1,11 +1,107 @@
 """用户组路由"""
+import os
+import json
 from flask import Blueprint, request, jsonify
 from app.services.user_group_service import user_group_service
 from app.services.sheets_service import sheets_service
-from app.services.pma_api_service import get_all_employees
+from app.services.pma_api_service import get_all_employees, get_raw_employees
 from app.utils import api_key_required
 
 user_group_bp = Blueprint('user_group', __name__, url_prefix='/api/admin')
+
+
+# ==================== 数据迁移 API（放在 <group_id> 路由之前避免冲突） ====================
+
+@user_group_bp.route('/user-groups/migrate-to-sheets', methods=['POST'])
+@api_key_required
+def migrate_user_groups_to_sheets():
+    """将 user_groups.json 迁移到 Google Sheets，并修正旧的 member_ids
+
+    逻辑：
+    1. 读取 user_groups.json
+    2. 从外部 API 获取原始员工数据，构建 emp_{user_id} → emp_{id} 映射
+    3. 修正每个组的 member_ids
+    4. 写入 Google Sheets UserGroups worksheet
+    """
+    try:
+        # 1. 读取 JSON 文件
+        data_dir = os.getenv('DATA_DIR', os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'))
+        json_path = os.path.join(data_dir, 'user_groups.json')
+
+        if not os.path.exists(json_path):
+            return jsonify({'success': False, 'message': 'user_groups.json 不存在'}), 404
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        groups = data.get('user_groups', [])
+        if not groups:
+            return jsonify({'success': False, 'message': 'user_groups.json 中没有用户组数据'}), 400
+
+        # 2. 获取原始员工数据，构建 old_id → new_id 映射
+        raw_employees = get_raw_employees()
+        id_mapping = {}  # emp_{user_id} → emp_{id}
+        for emp in raw_employees:
+            raw_user_id = emp.get('user_id')  # 外部 API 的 user_id 字段
+            raw_id = emp.get('id')            # 外部 API 的 id 字段
+            source = emp.get('source', 'sp8d')
+
+            if raw_user_id is not None and raw_id is not None and str(raw_user_id) != str(raw_id):
+                if source == 'ovs':
+                    old_key = f"emp_ovs_{raw_user_id}"
+                    new_key = f"emp_ovs_{raw_id}"
+                else:
+                    old_key = f"emp_{raw_user_id}"
+                    new_key = f"emp_{raw_id}"
+                id_mapping[old_key] = new_key
+
+        # 3. 迁移每个组到 Sheets
+        sheet = sheets_service.user_groups_sheet
+        migrated = []
+        id_fixes = []
+
+        for group in groups:
+            group_id = group.get('id', '')
+            name = group.get('name', '')
+            description = group.get('description', '')
+            old_member_ids = group.get('member_ids', [])
+            created_at = group.get('created_at', '')
+            updated_at = group.get('updated_at', '')
+
+            # 修正 member_ids
+            new_member_ids = []
+            for mid in old_member_ids:
+                if mid in id_mapping:
+                    id_fixes.append({'old': mid, 'new': id_mapping[mid], 'group': name})
+                    new_member_ids.append(id_mapping[mid])
+                else:
+                    new_member_ids.append(mid)
+
+            member_ids_json = json.dumps(new_member_ids, ensure_ascii=False)
+            sheet.append_row([group_id, name, description, member_ids_json, created_at, updated_at])
+
+            migrated.append({
+                'group_id': group_id,
+                'name': name,
+                'member_count': len(new_member_ids),
+                'member_ids': new_member_ids,
+            })
+
+        # 清除缓存
+        sheets_service.clear_cache('user_groups')
+
+        return jsonify({
+            'success': True,
+            'message': f'成功迁移 {len(migrated)} 个用户组到 Google Sheets',
+            'data': {
+                'migrated_groups': migrated,
+                'id_fixes': id_fixes,
+                'id_mapping_count': len(id_mapping),
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'迁移失败: {str(e)}'}), 500
 
 
 # ==================== 用户组管理 API ====================
