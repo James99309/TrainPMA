@@ -1,6 +1,11 @@
 {
-  "version": "v1.01",
+  "version": "v1.02",
   "changelog": [
+    {
+      "version": "v1.02",
+      "date": "2026-02-01",
+      "message": "添加 NAS 一键部署脚本 deploy.sh"
+    },
     {
       "version": "v1.01",
       "date": "2026-02-01",
