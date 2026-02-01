@@ -64,21 +64,18 @@ step "2/6 Pulling latest code"
 
 if [ ! -d .git ]; then
     info "No .git found - initializing from remote..."
-    TMPDIR=$(mktemp -d)
-    git clone --bare "$REPO_URL" "$TMPDIR/.git"
-    mv "$TMPDIR/.git" .git
-    rm -rf "$TMPDIR"
-    git config --unset core.bare
-    git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
+    git init
+    git remote add origin "$REPO_URL"
     git fetch origin "$BRANCH"
-    git reset --hard "origin/$BRANCH"
+    git checkout -f "origin/$BRANCH" -- .
+    git reset "origin/$BRANCH"
     ok "Repository initialized"
 else
     info "Fetching latest from origin/$BRANCH..."
     git fetch origin "$BRANCH"
-    git reset --hard "origin/$BRANCH"
-    ok "Code updated"
 fi
+git reset --hard "origin/$BRANCH"
+ok "Code updated"
 
 NEW_COMMIT=$(git rev-parse --short HEAD)
 NEW_APP_VERSION="(unknown)"
