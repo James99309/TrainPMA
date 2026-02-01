@@ -754,6 +754,25 @@ export const adminApi = {
       not_passed: result.not_passed || 0,
     };
   },
+
+  // ==================== Learning Analytics ====================
+
+  // Get syllabi list for analytics tabs
+  async getAnalyticsSyllabi(): Promise<{ id: string; name: string }[]> {
+    const result = await adminRequest<{ success: boolean; data: { id: string; name: string }[] }>(
+      '/api/admin/learning-analytics/syllabi'
+    );
+    return result.data || [];
+  },
+
+  // Get learning analytics data
+  async getLearningAnalytics(syllabusId?: string): Promise<any> {
+    const params = syllabusId ? `?syllabus_id=${syllabusId}` : '';
+    const result = await adminRequest<{ success: boolean; data: any }>(
+      `/api/admin/learning-analytics${params}`
+    );
+    return result.data;
+  },
 };
 
 export default adminApi;

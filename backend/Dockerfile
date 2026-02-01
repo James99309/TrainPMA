@@ -14,12 +14,15 @@ RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose port
+# Set Flask app for migrations
+ENV FLASK_APP=run.py
+
+# Expose port (default 5005, overridden by PORT env var)
 EXPOSE 5005
 
-# Health check
+# Health check (uses PORT env var, defaults to 5005)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5005/api/health')" || exit 1
+    CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.getenv(\"PORT\",\"5005\")}/api/health')" || exit 1
 
-# Start command
-CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "2", "--timeout", "120", "run:app"]
+# Start command via entrypoint script (already copied via COPY . .)
+CMD ["sh", "entrypoint.sh"]

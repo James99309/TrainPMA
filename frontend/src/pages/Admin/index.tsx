@@ -5,9 +5,10 @@ import { SurveyManager } from './SurveyManager';
 import { QuizImporter } from './QuizImporter';
 import { SyllabusManager } from './SyllabusManager';
 import { UserGroupManager } from './UserGroupManager';
+import { LearningAnalytics } from './LearningAnalytics';
 import adminApi from '../../services/adminApi';
 
-type AdminTab = 'courses' | 'surveys' | 'quiz' | 'syllabi' | 'groups';
+type AdminTab = 'courses' | 'surveys' | 'quiz' | 'syllabi' | 'groups' | 'analytics';
 
 export function AdminPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -66,6 +67,7 @@ export function AdminPage() {
       {activeTab === 'quiz' && <QuizImporter />}
       {activeTab === 'syllabi' && <SyllabusManager />}
       {activeTab === 'groups' && <UserGroupManager />}
+      {activeTab === 'analytics' && <LearningAnalytics />}
     </AdminLayout>
   );
 }

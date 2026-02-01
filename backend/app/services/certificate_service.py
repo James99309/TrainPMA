@@ -2,39 +2,20 @@
 培训证书服务
 管理培训证书的颁发、存储和查询
 """
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import uuid
 import json
-import os
 import threading
+
+from app.models.base import db
+from app.models.certificate import Certificate
 
 
 class CertificateService:
-    """证书管理服务 - 管理 Certificates Sheet"""
+    """证书管理服务 - 管理证书数据库表"""
 
     _instance = None
     _lock = threading.Lock()
-
-    # Certificates Sheet 列结构
-    COLUMNS = [
-        'certificate_id',
-        'user_id',
-        'user_name',
-        'user_company',
-        'syllabus_id',
-        'syllabus_name',
-        'score',
-        'max_score',
-        'percentage',          # 百分比评分
-        'xp_earned',           # XP 经验值
-        'rank',
-        'total_participants',
-        'course_scores',       # JSON object - {"course_id": {"name": "...", "score": 50, "max_score": 50, "percentage": 100, "xp_earned": 150}, ...}
-        'issued_at',
-        'issued_by'
-    ]
 
     def __new__(cls):
         if cls._instance is None:
@@ -48,66 +29,8 @@ class CertificateService:
         if self._initialized:
             return
 
-        try:
-            scope = [
-                'https://spreadsheets.google.com/feeds',
-                'https://www.googleapis.com/auth/drive'
-            ]
-
-            creds_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials/service-account.json')
-            creds = ServiceAccountCredentials.from_json_keyfile_name(creds_file, scope)
-            self.client = gspread.authorize(creds)
-
-            sheets_id = os.getenv('GOOGLE_SHEETS_ID')
-            self.spreadsheet = self.client.open_by_key(sheets_id)
-
-            # 获取或创建 Certificates sheet
-            self._ensure_certificates_sheet()
-
-            self._initialized = True
-            print("✅ CertificateService 初始化成功")
-        except Exception as e:
-            print(f"❌ CertificateService 初始化失败: {str(e)}")
-            raise
-
-    def _ensure_certificates_sheet(self):
-        """确保 Certificates sheet 存在且表头完整"""
-        try:
-            self.certificates_sheet = self.spreadsheet.worksheet('Certificates')
-            print("✅ Certificates sheet 已存在")
-
-            # 检查并修复表头
-            self._fix_headers_if_needed()
-
-        except gspread.exceptions.WorksheetNotFound:
-            print("⚠️ Certificates sheet 不存在，正在创建...")
-            self.certificates_sheet = self.spreadsheet.add_worksheet(
-                title='Certificates',
-                rows=1000,
-                cols=len(self.COLUMNS)
-            )
-            # 添加表头
-            self.certificates_sheet.append_row(self.COLUMNS)
-            print("✅ Certificates sheet 创建成功")
-
-    def _fix_headers_if_needed(self):
-        """检查并修复缺失的表头"""
-        try:
-            current_headers = self.certificates_sheet.row_values(1)
-            expected_headers = self.COLUMNS
-
-            if current_headers == expected_headers:
-                print("✅ 证书表头完整")
-                return
-
-            print(f"⚠️ 证书表头不完整，当前 {len(current_headers)} 列，期望 {len(expected_headers)} 列")
-
-            # 直接覆盖第一行为正确的表头
-            self.certificates_sheet.update('A1', [expected_headers])
-            print("✅ 证书表头已修复")
-
-        except Exception as e:
-            print(f"❌ 检查/修复证书表头失败: {str(e)}")
+        self._initialized = True
+        print("✅ CertificateService 初始化成功")
 
     def issue_certificates_for_syllabus(
         self,
@@ -150,7 +73,7 @@ class CertificateService:
             # 批量预加载分数和问题数据（减少 API 调用次数）
             from app.services.sheets_service import sheets_service
             print("📊 预加载分数和问题数据...")
-            all_scores = sheets_service.scores_sheet.get_all_records()
+            all_scores = sheets_service.get_all_scores()
             survey_ids = list(set(q['survey_id'] for q in course_quizzes))
             all_questions = {
                 sid: sheets_service.get_questions_by_survey(sid)
@@ -208,7 +131,7 @@ class CertificateService:
 
             # 颁发证书
             certificates = []
-            now = datetime.now().isoformat()
+            now = datetime.now()
 
             for rank, participant in enumerate(participants, 1):
                 user_id = participant['user_id']
@@ -246,7 +169,7 @@ class CertificateService:
                     'issued_by': issued_by
                 }
 
-                # 保存到 Sheet
+                # 保存到数据库
                 self._save_certificate(certificate)
                 certificates.append(certificate)
 
@@ -266,73 +189,59 @@ class CertificateService:
             return {'success': False, 'message': str(e)}
 
     def _save_certificate(self, certificate: dict):
-        """保存证书到 Sheet"""
-        row = [
-            certificate.get('certificate_id', ''),
-            certificate.get('user_id', ''),
-            certificate.get('user_name', ''),
-            certificate.get('user_company', ''),
-            certificate.get('syllabus_id', ''),
-            certificate.get('syllabus_name', ''),
-            certificate.get('score', 0),
-            certificate.get('max_score', 0),
-            certificate.get('percentage', 0),      # 百分比评分
-            certificate.get('xp_earned', 0),       # XP 经验值
-            certificate.get('rank', 0),
-            certificate.get('total_participants', 0),
-            json.dumps(certificate.get('course_scores', {}), ensure_ascii=False),
-            certificate.get('issued_at', ''),
-            certificate.get('issued_by', '')
-        ]
-        self.certificates_sheet.append_row(row)
+        """保存证书到数据库"""
+        # Handle issued_at: could be datetime object or ISO string
+        issued_at = certificate.get('issued_at')
+        if isinstance(issued_at, str):
+            try:
+                issued_at = datetime.fromisoformat(issued_at)
+            except (ValueError, TypeError):
+                issued_at = datetime.now()
+        elif not isinstance(issued_at, datetime):
+            issued_at = datetime.now()
+
+        # Handle course_scores: must be JSON string for Text column
+        course_scores = certificate.get('course_scores', {})
+        if isinstance(course_scores, (dict, list)):
+            course_scores = json.dumps(course_scores, ensure_ascii=False)
+
+        cert_obj = Certificate(
+            certificate_id=certificate.get('certificate_id', ''),
+            user_id=certificate.get('user_id', ''),
+            user_name=certificate.get('user_name', ''),
+            user_company=certificate.get('user_company', ''),
+            syllabus_id=certificate.get('syllabus_id', ''),
+            syllabus_name=certificate.get('syllabus_name', ''),
+            score=certificate.get('score', 0),
+            max_score=certificate.get('max_score', 0),
+            percentage=certificate.get('percentage', 0),
+            xp_earned=certificate.get('xp_earned', 0),
+            rank=certificate.get('rank', 0),
+            total_participants=certificate.get('total_participants', 0),
+            course_scores=course_scores,
+            issued_at=issued_at,
+            issued_by=certificate.get('issued_by', '')
+        )
+        db.session.add(cert_obj)
+        db.session.commit()
 
     def _get_existing_certificates_for_syllabus(self, syllabus_id: str) -> list:
         """获取课程表已颁发的证书"""
         try:
-            all_values = self.certificates_sheet.get_all_values()
-            if len(all_values) <= 1:
-                return []
-
-            headers = all_values[0]
-            syllabus_id_col = headers.index('syllabus_id') if 'syllabus_id' in headers else 4
-
-            certificates = []
-            for row in all_values[1:]:
-                if len(row) > syllabus_id_col and row[syllabus_id_col] == syllabus_id:
-                    cert = {}
-                    for i, header in enumerate(headers):
-                        cert[header] = row[i] if i < len(row) else ''
-                    certificates.append(cert)
-
-            return certificates
+            certificates = Certificate.query.filter_by(syllabus_id=syllabus_id).all()
+            return [cert.to_dict() for cert in certificates]
         except Exception:
             return []
 
     def _delete_certificates_for_syllabus(self, syllabus_id: str) -> int:
         """删除课程表的所有证书"""
         try:
-            all_values = self.certificates_sheet.get_all_values()
-            if len(all_values) <= 1:
-                return 0
-
-            headers = all_values[0]
-            syllabus_id_col = headers.index('syllabus_id') if 'syllabus_id' in headers else 4
-
-            # 找出要删除的行（从后往前删除以保持索引正确）
-            rows_to_delete = []
-            for idx, row in enumerate(all_values[1:], start=2):  # idx 是 Excel 行号
-                if len(row) > syllabus_id_col and row[syllabus_id_col] == syllabus_id:
-                    rows_to_delete.append(idx)
-
-            # 从后往前删除
-            deleted = 0
-            for row_idx in reversed(rows_to_delete):
-                self.certificates_sheet.delete_rows(row_idx)
-                deleted += 1
-
-            return deleted
+            deleted_count = Certificate.query.filter_by(syllabus_id=syllabus_id).delete()
+            db.session.commit()
+            return deleted_count
         except Exception as e:
             print(f"❌ 删除证书失败: {str(e)}")
+            db.session.rollback()
             return 0
 
     def _get_course_details_for_syllabus(self, syllabus: dict) -> dict:
@@ -561,22 +470,12 @@ class CertificateService:
             证书列表
         """
         try:
-            all_values = self.certificates_sheet.get_all_values()
-            if len(all_values) <= 1:
-                return []
-
-            headers = all_values[0]
-            user_id_col = headers.index('user_id') if 'user_id' in headers else 1
-
-            certificates = []
-            for row in all_values[1:]:
-                if len(row) > user_id_col and row[user_id_col] == user_id:
-                    cert = self._row_to_certificate(row, headers)
-                    certificates.append(cert)
+            certificates = Certificate.query.filter_by(user_id=user_id).all()
+            cert_list = [cert.to_dict() for cert in certificates]
 
             # 按颁发时间倒序
-            certificates.sort(key=lambda x: x.get('issued_at', ''), reverse=True)
-            return certificates
+            cert_list.sort(key=lambda x: x.get('issued_at', ''), reverse=True)
+            return cert_list
 
         except Exception as e:
             print(f"❌ 获取用户证书失败: {str(e)}")
@@ -593,45 +492,14 @@ class CertificateService:
             证书详情，不存在返回 None
         """
         try:
-            all_values = self.certificates_sheet.get_all_values()
-            if len(all_values) <= 1:
-                return None
-
-            headers = all_values[0]
-            cert_id_col = headers.index('certificate_id') if 'certificate_id' in headers else 0
-
-            for row in all_values[1:]:
-                if len(row) > cert_id_col and row[cert_id_col] == certificate_id:
-                    return self._row_to_certificate(row, headers)
-
+            certificate = db.session.get(Certificate, certificate_id)
+            if certificate:
+                return certificate.to_dict()
             return None
 
         except Exception as e:
             print(f"❌ 获取证书详情失败: {str(e)}")
             return None
-
-    def _row_to_certificate(self, row: list, headers: list) -> dict:
-        """将行数据转换为证书字典"""
-        cert = {}
-        for i, header in enumerate(headers):
-            value = row[i] if i < len(row) else ''
-
-            # 解析 JSON 字段
-            if header == 'course_scores':
-                try:
-                    cert[header] = json.loads(value) if value else {}
-                except:
-                    cert[header] = {}
-            # 数值字段
-            elif header in ['score', 'max_score', 'percentage', 'xp_earned', 'rank', 'total_participants']:
-                try:
-                    cert[header] = int(value) if value else 0
-                except:
-                    cert[header] = 0
-            else:
-                cert[header] = value
-
-        return cert
 
     def get_syllabus_certificate_stats(self, syllabus_id: str) -> dict:
         """

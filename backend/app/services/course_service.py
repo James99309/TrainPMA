@@ -6,6 +6,8 @@ import shutil
 from datetime import datetime
 from io import BytesIO
 from PyPDF2 import PdfReader
+from app.models.base import db
+from app.models.course import Course
 
 
 class CourseService:
@@ -14,22 +16,9 @@ class CourseService:
     def __init__(self):
         # 课程目录路径
         self.courses_dir = os.getenv('COURSES_DIR', '/app/courses')
-        self.courses_json_path = os.path.join(self.courses_dir, 'courses.json')
 
         # 确保目录存在
         os.makedirs(self.courses_dir, exist_ok=True)
-
-    def _load_courses(self) -> dict:
-        """加载课程列表"""
-        if os.path.exists(self.courses_json_path):
-            with open(self.courses_json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {'courses': []}
-
-    def _save_courses(self, data: dict):
-        """保存课程列表"""
-        with open(self.courses_json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _normalize_course(self, course: dict) -> dict:
         """标准化课程数据，确保必要字段存在"""
@@ -43,17 +32,15 @@ class CourseService:
 
     def get_all_courses(self) -> list:
         """获取所有课程"""
-        data = self._load_courses()
-        courses = data.get('courses', [])
+        courses = Course.query.order_by(Course.order).all()
         # 标准化每个课程数据
-        return [self._normalize_course(course) for course in courses]
+        return [self._normalize_course(c.to_dict()) for c in courses]
 
     def get_course(self, course_id: str) -> dict:
         """获取单个课程"""
-        courses = self.get_all_courses()
-        for course in courses:
-            if course.get('id') == course_id:
-                return course
+        course = db.session.get(Course, course_id)
+        if course:
+            return self._normalize_course(course.to_dict())
         return None
 
     def create_course(self, title: str, description: str, pdf_content: bytes,
@@ -96,40 +83,34 @@ class CourseService:
         duration_minutes = max(5, total_pages * 2)
 
         # 获取下一个顺序号
-        courses = self.get_all_courses()
-        next_order = max([c.get('order', 0) for c in courses], default=0) + 1
+        max_order = db.session.query(db.func.max(Course.order)).scalar() or 0
+        next_order = max_order + 1
 
-        # 创建课程数据
-        course = {
-            'id': course_id,
-            'title': title,
-            'description': description,
-            'type': 'pdf',
-            'mediaUrl': f'/api/courses/{course_id}/content.pdf',
-            'thumbnailUrl': f'/courses/{course_id}/thumbnail.png',
-            'totalPages': total_pages,
-            'duration_minutes': duration_minutes,
-            'order': next_order,
-            'tags': tags or [],
-            'prerequisites': prerequisites or [],
-            'is_published': True,
-            'icon': icon,
-            'created_at': datetime.now().isoformat()
-        }
+        # 创建课程模型实例
+        course = Course(
+            id=course_id,
+            title=title,
+            description=description,
+            type='pdf',
+            media_url=f'/api/courses/{course_id}/content.pdf',
+            thumbnail_url=f'/courses/{course_id}/thumbnail.png',
+            total_pages=total_pages,
+            duration_minutes=duration_minutes,
+            order=next_order,
+            tags=json.dumps(tags or [], ensure_ascii=False),
+            prerequisites=json.dumps(prerequisites or [], ensure_ascii=False),
+            is_published=True,
+            icon=icon,
+            quiz_survey_id=quiz_survey_id,
+            quiz_pass_score=pass_score if quiz_survey_id else None,
+            created_at=datetime.utcnow()
+        )
 
-        # 添加考卷信息
-        if quiz_survey_id:
-            course['quiz'] = {
-                'survey_id': quiz_survey_id,
-                'pass_score': pass_score
-            }
+        # 保存到数据库
+        db.session.add(course)
+        db.session.commit()
 
-        # 保存到列表
-        data = self._load_courses()
-        data['courses'].append(course)
-        self._save_courses(data)
-
-        return course
+        return course.to_dict()
 
     def update_course(self, course_id: str, updates: dict) -> dict:
         """
@@ -142,24 +123,39 @@ class CourseService:
         Returns:
             更新后的课程信息
         """
-        data = self._load_courses()
-        courses = data.get('courses', [])
+        course = db.session.get(Course, course_id)
+        if not course:
+            return None
 
-        for i, course in enumerate(courses):
-            if course.get('id') == course_id:
-                # 允许更新的字段
-                allowed_fields = ['title', 'description', 'order', 'quiz', 'isLocked',
-                                  'tags', 'prerequisites', 'is_published', 'icon']
-                for field in allowed_fields:
-                    if field in updates:
-                        course[field] = updates[field]
+        # 允许更新的字段
+        allowed_fields = ['title', 'description', 'order', 'quiz', 'isLocked',
+                          'tags', 'prerequisites', 'is_published', 'icon']
 
-                course['updated_at'] = datetime.now().isoformat()
-                data['courses'][i] = course
-                self._save_courses(data)
-                return course
+        for field in allowed_fields:
+            if field in updates:
+                if field == 'quiz':
+                    # Handle quiz object - split into quiz_survey_id and quiz_pass_score
+                    quiz_data = updates[field]
+                    if quiz_data:
+                        course.quiz_survey_id = quiz_data.get('survey_id')
+                        course.quiz_pass_score = quiz_data.get('pass_score', 60)
+                    else:
+                        course.quiz_survey_id = None
+                        course.quiz_pass_score = None
+                elif field == 'tags':
+                    course.tags = json.dumps(updates[field], ensure_ascii=False)
+                elif field == 'prerequisites':
+                    course.prerequisites = json.dumps(updates[field], ensure_ascii=False)
+                elif field == 'isLocked':
+                    # isLocked is not a database field - skip it
+                    pass
+                else:
+                    setattr(course, field, updates[field])
 
-        return None
+        course.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return course.to_dict()
 
     def delete_course(self, course_id: str) -> bool:
         """
@@ -171,24 +167,20 @@ class CourseService:
         Returns:
             是否删除成功
         """
-        data = self._load_courses()
-        courses = data.get('courses', [])
+        course = db.session.get(Course, course_id)
+        if not course:
+            return False
 
-        # 查找并删除
-        for i, course in enumerate(courses):
-            if course.get('id') == course_id:
-                # 删除课程目录
-                course_dir = os.path.join(self.courses_dir, course_id)
-                if os.path.exists(course_dir):
-                    shutil.rmtree(course_dir)
+        # 删除课程目录
+        course_dir = os.path.join(self.courses_dir, course_id)
+        if os.path.exists(course_dir):
+            shutil.rmtree(course_dir)
 
-                # 从列表中移除
-                del courses[i]
-                data['courses'] = courses
-                self._save_courses(data)
-                return True
+        # 从数据库删除
+        db.session.delete(course)
+        db.session.commit()
 
-        return False
+        return True
 
     def reorder_courses(self, course_ids: list) -> bool:
         """
@@ -200,20 +192,16 @@ class CourseService:
         Returns:
             是否成功
         """
-        data = self._load_courses()
-        courses = data.get('courses', [])
-
-        # 创建 ID -> 课程的映射
-        course_map = {c['id']: c for c in courses}
+        # 获取所有课程
+        courses = Course.query.all()
+        course_map = {c.id: c for c in courses}
 
         # 按新顺序更新
         for order, course_id in enumerate(course_ids, 1):
             if course_id in course_map:
-                course_map[course_id]['order'] = order
+                course_map[course_id].order = order
 
-        # 按 order 排序
-        data['courses'] = sorted(courses, key=lambda x: x.get('order', 999))
-        self._save_courses(data)
+        db.session.commit()
         return True
 
     def link_quiz(self, course_id: str, survey_id: str, pass_score: int = 60) -> dict:

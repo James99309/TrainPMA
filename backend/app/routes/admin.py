@@ -4,6 +4,7 @@ from app.services.course_service import course_service
 from app.services.excel_parser import excel_parser
 from app.services.progress_service import progress_service
 from app.utils import api_key_required
+from app.models.base import db
 from io import BytesIO
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -638,3 +639,201 @@ def create_badges_from_progress():
             'success': False,
             'message': str(e)
         }), 500
+
+
+# ==================== 学习成绩分析 ====================
+
+@admin_bp.route('/learning-analytics', methods=['GET'])
+@api_key_required
+def get_learning_analytics():
+    """
+    获取学习成绩数据
+
+    Query params:
+      - syllabus_id: 可选，指定课程表 ID 时返回该课程表下的逐课程得分
+      - 不传时返回全部概览（每个用户的汇总数据）
+    """
+    try:
+        from app.models.user import User
+        from app.models.course import Course
+        from app.models.syllabus import Syllabus
+        from app.models.course_badge import CourseBadge
+        from app.services.pma_api_service import get_all_employees
+
+        syllabus_id = request.args.get('syllabus_id')
+
+        # 1. 获取所有用户（guests from DB）
+        users = User.query.all()
+        user_map = {u.user_id: u.to_dict() for u in users}
+
+        # 1b. 获取 PMA 员工数据（emp_* 用户的名字和公司）
+        emp_map = {}
+        try:
+            all_employees = get_all_employees()
+            for emp in all_employees:
+                uid = emp.get('user_id')
+                if uid:
+                    emp_map[uid] = {
+                        'name': emp.get('name') or emp.get('real_name', ''),
+                        'company': emp.get('company') or emp.get('company_name', ''),
+                    }
+        except Exception:
+            pass  # PMA API 不可用时跳过，使用其他来源
+
+        # 2. 获取所有课程（有测验的）
+        all_courses = Course.query.filter(Course.quiz_survey_id.isnot(None)).all()
+        course_map = {c.id: c for c in all_courses}
+
+        # 3. 获取所有徽章，按 user_id 分组
+        all_badges = CourseBadge.query.all()
+        user_badges = {}
+        user_names_from_badges = {}  # 从 badge 收集用户名
+        for badge in all_badges:
+            if badge.user_id not in user_badges:
+                user_badges[badge.user_id] = {}
+            user_badges[badge.user_id][badge.course_id] = badge.to_dict()
+            # 收集 user_name（取非空的值）
+            if badge.user_name and badge.user_name != '未知用户':
+                user_names_from_badges[badge.user_id] = badge.user_name
+
+        if syllabus_id:
+            # === 课程表详情视图 ===
+            syllabus = db.session.get(Syllabus, syllabus_id)
+            if not syllabus:
+                return jsonify({'success': False, 'message': '课程表不存在'}), 404
+
+            syl_dict = syllabus.to_dict()
+            course_sequence = syl_dict.get('course_sequence', [])
+            course_ids = [item['course_id'] for item in course_sequence if 'course_id' in item]
+
+            # 构建课程列表（保持顺序）
+            courses_info = []
+            for cid in course_ids:
+                c = course_map.get(cid)
+                if c:
+                    courses_info.append({
+                        'course_id': c.id,
+                        'title': c.title,
+                        'pass_score': c.quiz_pass_score or 60,
+                    })
+
+            # 构建每个用户的行数据
+            rows = []
+            for uid, badges in user_badges.items():
+                has_any = any(cid in badges for cid in course_ids)
+                if not has_any:
+                    continue
+
+                user_info = user_map.get(uid, {})
+                emp_info = emp_map.get(uid, {})
+                # 优先用 badge 上的名字，fallback 到 PMA API，再到 users 表
+                name = user_names_from_badges.get(uid) or emp_info.get('name') or user_info.get('name', '未知用户')
+                company = emp_info.get('company') or user_info.get('company', '')
+                course_scores = {}
+                passed_count = 0
+
+                for cid in course_ids:
+                    badge = badges.get(cid)
+                    if badge:
+                        passed = badge['percentage'] >= (course_map[cid].quiz_pass_score or 60) if cid in course_map else False
+                        course_scores[cid] = {
+                            'score': badge['score'],
+                            'max_score': badge['max_score'],
+                            'percentage': badge['percentage'],
+                            'passed': passed,
+                        }
+                        if passed:
+                            passed_count += 1
+                    else:
+                        course_scores[cid] = None
+
+                rows.append({
+                    'user_id': uid,
+                    'name': name,
+                    'company': company,
+                    'course_scores': course_scores,
+                    'passed_count': passed_count,
+                    'total_count': len(course_ids),
+                })
+
+            rows.sort(key=lambda r: r['passed_count'], reverse=True)
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'view': 'syllabus',
+                    'syllabus': {
+                        'id': syl_dict['id'],
+                        'name': syl_dict['name'],
+                    },
+                    'courses': courses_info,
+                    'rows': rows,
+                }
+            })
+
+        else:
+            # === 全部概览视图 ===
+            total_courses_with_quiz = len(course_map)
+
+            rows = []
+            for uid, badges in user_badges.items():
+                user_info = user_map.get(uid, {})
+                emp_info = emp_map.get(uid, {})
+                # 优先用 badge 上的名字，fallback 到 PMA API，再到 users 表
+                name = user_names_from_badges.get(uid) or emp_info.get('name') or user_info.get('name', '未知用户')
+                company = emp_info.get('company') or user_info.get('company', '')
+                completed = 0
+                completed_course_names = []
+                total_score_sum = 0
+                total_max_sum = 0
+
+                for cid, badge in badges.items():
+                    if cid not in course_map:
+                        continue
+                    course = course_map[cid]
+                    pass_score = course.quiz_pass_score or 60
+                    if badge['percentage'] >= pass_score:
+                        completed += 1
+                        completed_course_names.append(course.title)
+                    total_score_sum += badge['score']
+                    total_max_sum += badge['max_score']
+
+                rows.append({
+                    'user_id': uid,
+                    'name': name,
+                    'company': company,
+                    'completed_courses': completed,
+                    'completed_course_names': completed_course_names,
+                    'total_courses': total_courses_with_quiz,
+                    'avg_score': total_score_sum,
+                    'avg_max_score': total_max_sum,
+                })
+
+            rows.sort(key=lambda r: r['completed_courses'], reverse=True)
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'view': 'overview',
+                    'total_courses': total_courses_with_quiz,
+                    'rows': rows,
+                }
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@admin_bp.route('/learning-analytics/syllabi', methods=['GET'])
+@api_key_required
+def get_analytics_syllabi():
+    """获取所有已发布的课程表列表（用于前端 tab 展示）"""
+    try:
+        from app.models.syllabus import Syllabus
+        syllabi = Syllabus.query.filter_by(is_published=True).all()
+        result = [{'id': s.id, 'name': s.name} for s in syllabi]
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

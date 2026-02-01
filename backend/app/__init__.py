@@ -1,21 +1,32 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 import os
 
 # 加载环境变量
 load_dotenv()
 
+# Flask-Migrate instance (needs to be module-level for `flask db` commands)
+migrate = Migrate()
+
 def create_app(config_name='development'):
     """Flask应用工厂"""
     app = Flask(__name__)
-    
+
     # 配置
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-key-change-in-production')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 86400))
-    
+
+    # Database 配置
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+        'DATABASE_URL',
+        'postgresql://pma:pma_secure_password_2025@localhost:5432/trainpma'
+    )
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
     # CORS配置
     cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174,http://localhost:3000').split(',')
     CORS(app, resources={
@@ -25,7 +36,12 @@ def create_app(config_name='development'):
             "allow_headers": ["Content-Type", "Authorization", "X-API-Key"]
         }
     })
-    
+
+    # 初始化 SQLAlchemy + Migrate
+    from app.models import db
+    db.init_app(app)
+    migrate.init_app(app, db)
+
     # JWT
     jwt = JWTManager(app)
 
@@ -49,7 +65,7 @@ def create_app(config_name='development'):
     def token_verification_failed_callback(jwt_header, jwt_payload):
         app.logger.warning(f"JWT verification failed: {jwt_payload}")
         return {'error': 'Token verification failed', 'code': 'verification_failed'}, 422
-    
+
     # 注册蓝图
     from app.routes import auth, survey, quiz, leaderboard, admin, course, progress
     from app.routes import syllabus, user_group, certificate, badge
@@ -65,19 +81,19 @@ def create_app(config_name='development'):
     app.register_blueprint(user_group.user_group_bp)
     app.register_blueprint(certificate.certificate_bp)
     app.register_blueprint(badge.badge_bp)
-    
+
     # 健康检查路由
     @app.route('/health', methods=['GET'])
     @app.route('/api/health', methods=['GET'])
     def health():
         return {'status': 'ok', 'message': 'Quiz System Backend is running'}, 200
-    
+
     @app.errorhandler(404)
     def not_found(error):
         return {'error': 'Not Found'}, 404
-    
+
     @app.errorhandler(500)
     def internal_error(error):
         return {'error': 'Internal Server Error'}, 500
-    
+
     return app

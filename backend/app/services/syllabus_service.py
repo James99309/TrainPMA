@@ -1,5 +1,4 @@
 """课程表管理服务"""
-import os
 import json
 import uuid
 import secrets
@@ -7,41 +6,19 @@ import string
 from datetime import datetime
 from typing import Optional, List, Tuple
 
+from app.models.base import db
+from app.models.syllabus import Syllabus
+from app.models.user_group import UserGroup
+
 
 class SyllabusService:
     """课程表管理服务"""
 
     def __init__(self):
-        # 数据目录路径
-        self.data_dir = os.getenv('DATA_DIR', os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'))
-        self.syllabi_json_path = os.path.join(self.data_dir, 'syllabi.json')
-        self.user_groups_json_path = os.path.join(self.data_dir, 'user_groups.json')
-
-        # 确保目录存在
-        os.makedirs(self.data_dir, exist_ok=True)
-
-    def _load_syllabi(self) -> dict:
-        """加载课程表列表"""
-        if os.path.exists(self.syllabi_json_path):
-            with open(self.syllabi_json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {'syllabi': []}
-
-    def _save_syllabi(self, data: dict):
-        """保存课程表列表"""
-        with open(self.syllabi_json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-    def _load_user_groups(self) -> dict:
-        """加载用户组列表"""
-        if os.path.exists(self.user_groups_json_path):
-            with open(self.user_groups_json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {'user_groups': []}
+        pass
 
     def _get_user_group_ids(self, user_id: str) -> list:
         """获取用户所属的用户组ID列表"""
-        data = self._load_user_groups()
         user_groups = []
 
         # 提取员工ID数字部分（emp_5 -> 5）
@@ -49,27 +26,30 @@ class SyllabusService:
         if user_id.startswith('emp_'):
             check_ids.append(user_id[4:])  # 也检查不带前缀的ID
 
-        for group in data.get('user_groups', []):
-            member_ids = group.get('member_ids', [])
+        # 从数据库查询用户组
+        all_groups = UserGroup.query.all()
+        for group in all_groups:
+            member_ids = group.get_member_ids()
             if any(uid in member_ids for uid in check_ids):
-                user_groups.append(group['id'])
+                user_groups.append(group.group_id)
+
         return user_groups
 
     def get_all_syllabi(self, include_unpublished: bool = False) -> list:
         """获取所有课程表"""
-        data = self._load_syllabi()
-        syllabi = data.get('syllabi', [])
+        query = Syllabus.query
+
         if not include_unpublished:
-            syllabi = [s for s in syllabi if s.get('is_published', False)]
-        return sorted(syllabi, key=lambda x: x.get('created_at', ''), reverse=True)
+            query = query.filter_by(is_published=True)
+
+        syllabi = query.order_by(Syllabus.created_at.desc()).all()
+        return [s.to_dict() for s in syllabi]
 
     def get_syllabus(self, syllabus_id: str) -> dict:
         """获取单个课程表"""
-        data = self._load_syllabi()
-        syllabi = data.get('syllabi', [])
-        for syllabus in syllabi:
-            if syllabus.get('id') == syllabus_id:
-                return syllabus
+        syllabus = db.session.get(Syllabus, syllabus_id)
+        if syllabus:
+            return syllabus.to_dict()
         return None
 
     def create_syllabus(
@@ -92,37 +72,41 @@ class SyllabusService:
         # 生成课程表ID
         syllabus_id = f"syl-{uuid.uuid4().hex[:8]}"
 
-        # 创建课程表数据
-        syllabus = {
-            'id': syllabus_id,
-            'name': name,
-            'description': description,
-            'cover_image_url': cover_image_url,
-            'course_sequence': [],
-            'access_type': 'public',
-            'access_rules': {
-                'allow_guests': True,
-                'allow_employees': True,
-                'allowed_user_groups': [],
-                'allowed_users': []
-            },
-            'time_config': {
-                'type': 'permanent',
-                'start_date': None,
-                'end_date': None
-            },
-            'theme': 'default',
-            'is_published': False,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
+        # 创建默认数据结构
+        default_access_rules = {
+            'allow_guests': True,
+            'allow_employees': True,
+            'allowed_user_groups': [],
+            'allowed_users': []
         }
 
-        # 保存到列表
-        data = self._load_syllabi()
-        data['syllabi'].append(syllabus)
-        self._save_syllabi(data)
+        default_time_config = {
+            'type': 'permanent',
+            'start_date': None,
+            'end_date': None
+        }
 
-        return syllabus
+        # 创建课程表模型
+        syllabus = Syllabus(
+            id=syllabus_id,
+            name=name,
+            description=description,
+            cover_image_url=cover_image_url,
+            course_sequence=json.dumps([]),
+            access_type='public',
+            access_rules=json.dumps(default_access_rules),
+            time_config=json.dumps(default_time_config),
+            theme='default',
+            is_published=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        # 保存到数据库
+        db.session.add(syllabus)
+        db.session.commit()
+
+        return syllabus.to_dict()
 
     def update_syllabus(self, syllabus_id: str, updates: dict) -> dict:
         """
@@ -135,27 +119,32 @@ class SyllabusService:
         Returns:
             更新后的课程表信息
         """
-        data = self._load_syllabi()
-        syllabi = data.get('syllabi', [])
+        syllabus = db.session.get(Syllabus, syllabus_id)
+        if not syllabus:
+            return None
 
-        for i, syllabus in enumerate(syllabi):
-            if syllabus.get('id') == syllabus_id:
-                # 允许更新的字段
-                allowed_fields = [
-                    'name', 'description', 'cover_image_url',
-                    'course_sequence', 'access_type', 'access_rules',
-                    'time_config', 'theme', 'is_published'
-                ]
-                for field in allowed_fields:
-                    if field in updates:
-                        syllabus[field] = updates[field]
+        # 允许更新的字段
+        allowed_fields = [
+            'name', 'description', 'cover_image_url',
+            'course_sequence', 'access_type', 'access_rules',
+            'time_config', 'theme', 'is_published'
+        ]
 
-                syllabus['updated_at'] = datetime.now().isoformat()
-                data['syllabi'][i] = syllabus
-                self._save_syllabi(data)
-                return syllabus
+        for field in allowed_fields:
+            if field in updates:
+                value = updates[field]
 
-        return None
+                # JSON字段需要序列化
+                if field in ['course_sequence', 'access_rules', 'time_config']:
+                    if isinstance(value, (dict, list)):
+                        value = json.dumps(value)
+
+                setattr(syllabus, field, value)
+
+        syllabus.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return syllabus.to_dict()
 
     def delete_syllabus(self, syllabus_id: str) -> bool:
         """
@@ -167,18 +156,13 @@ class SyllabusService:
         Returns:
             是否删除成功
         """
-        data = self._load_syllabi()
-        syllabi = data.get('syllabi', [])
+        syllabus = db.session.get(Syllabus, syllabus_id)
+        if not syllabus:
+            return False
 
-        # 查找并删除
-        for i, syllabus in enumerate(syllabi):
-            if syllabus.get('id') == syllabus_id:
-                del syllabi[i]
-                data['syllabi'] = syllabi
-                self._save_syllabi(data)
-                return True
-
-        return False
+        db.session.delete(syllabus)
+        db.session.commit()
+        return True
 
     def publish_syllabus(self, syllabus_id: str) -> dict:
         """发布课程表"""
@@ -283,18 +267,28 @@ class SyllabusService:
         if time_config.get('type') == 'permanent':
             return True
 
-        now = datetime.now()
+        now = datetime.utcnow()
         start_date = time_config.get('start_date')
         end_date = time_config.get('end_date')
 
         if start_date:
-            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            if now < start:
+            try:
+                start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                # Compare as naive UTC
+                start = start.replace(tzinfo=None)
+            except (ValueError, TypeError):
+                start = None
+            if start and now < start:
                 return False
 
         if end_date:
-            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-            if now > end:
+            try:
+                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                # Compare as naive UTC
+                end = end.replace(tzinfo=None)
+            except (ValueError, TypeError):
+                end = None
+            if end and now > end:
                 return False
 
         return True
@@ -437,11 +431,12 @@ class SyllabusService:
 
     def _is_code_in_use(self, code: str, exclude_syllabus_id: Optional[str] = None) -> bool:
         """检查邀请码是否已被使用"""
-        data = self._load_syllabi()
-        for syllabus in data.get('syllabi', []):
-            if exclude_syllabus_id and syllabus.get('id') == exclude_syllabus_id:
+        all_syllabi = Syllabus.query.all()
+        for syllabus in all_syllabi:
+            if exclude_syllabus_id and syllabus.id == exclude_syllabus_id:
                 continue
-            invitation = syllabus.get('access_rules', {}).get('guest_invitation', {})
+            syllabus_dict = syllabus.to_dict()
+            invitation = syllabus_dict.get('access_rules', {}).get('guest_invitation', {})
             if invitation.get('enabled') and invitation.get('code', '').upper() == code.upper():
                 return True
         return False
@@ -499,7 +494,8 @@ class SyllabusService:
             return False
         try:
             expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-            return datetime.now().astimezone() > expiry
+            expiry = expiry.replace(tzinfo=None)
+            return datetime.utcnow() > expiry
         except (ValueError, TypeError):
             return False
 
@@ -524,12 +520,10 @@ class SyllabusService:
             return False, None, '邀请码不能为空'
 
         code = code.upper().strip()
-        data = self._load_syllabi()
+        all_syllabi = Syllabus.query.filter_by(is_published=True).all()
 
-        for syllabus in data.get('syllabi', []):
-            # 跳过未发布的课程表
-            if not syllabus.get('is_published', False):
-                continue
+        for syllabus_model in all_syllabi:
+            syllabus = syllabus_model.to_dict()
 
             invitation = syllabus.get('access_rules', {}).get('guest_invitation', {})
             if not invitation.get('enabled'):
